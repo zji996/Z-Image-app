@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+env/
+.env
+*.env
+*.env.local
+venv/
+.venv/
+
+node_modules/
+dist/
+build/
+
+.DS_Store
+
+# Models directory (no large files in Git)
+models/
+!models/README.md
+
+# App-specific env files (not tracked)
+apps/*/.env
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+
