@@ -13,5 +13,6 @@ dependencies = [
     "redis>=5.0.0",
     "psycopg[binary]>=3.2.0",
     "python-dotenv>=1.0.0",
+    "modelscope>=1.32.0",
+    "huggingface-hub>=1.1.5",
 ]
-
