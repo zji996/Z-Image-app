@@ -1,0 +1,3 @@
+[submodule "third_party/Z-Image"]
+	path = third_party/Z-Image
+	url = https://github.com/Tongyi-MAI/Z-Image
