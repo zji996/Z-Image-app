@@ -15,5 +15,5 @@ if env_file.exists():
 if __name__ == "__main__":
     # Entry point for running a Celery worker via:
     # uv run python -m apps.worker.main
-    celery_app.worker_main()
-
+    # Celery 5.x expects the `worker` sub-command in argv.
+    celery_app.worker_main(argv=["worker", "-l", "info"])

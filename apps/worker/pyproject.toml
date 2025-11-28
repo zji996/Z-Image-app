@@ -8,5 +8,14 @@ dependencies = [
     "celery>=5.4.0",
     "redis>=5.0.0",
     "python-dotenv>=1.0.0",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.12.0",
+    "torch>=2.9.1",
+    "torchvision>=0.24.1",
+    "diffusers",
+    "transformers>=4.57.3",
 ]
+
+[tool.uv.sources]
+diffusers = { git = "https://github.com/huggingface/diffusers" }
 

@@ -1,3 +1,6 @@
 [submodule "third_party/Z-Image"]
 	path = third_party/Z-Image
 	url = https://github.com/Tongyi-MAI/Z-Image
+[submodule "third_party/DFloat11"]
+	path = third_party/DFloat11
+	url = https://github.com/LeanModels/DFloat11.git

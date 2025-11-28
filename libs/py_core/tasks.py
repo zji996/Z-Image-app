@@ -1,30 +1,13 @@
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
 from .celery_app import celery_app
-from .config import get_settings
+from .config import get_output_root
 from .z_image_pipeline import generate_image
-
-
-def _get_output_root() -> Path:
-    """
-    Root directory for generated images.
-
-    Defaults to a subdirectory under MODELS_DIR so that
-    all runtime artifacts stay out of version control.
-    """
-
-    settings = get_settings()
-    base_dir = settings.models_dir
-    subdir = os.getenv("Z_IMAGE_OUTPUT_SUBDIR", "z-image-outputs")
-    output_root = (base_dir / subdir).resolve()
-    output_root.mkdir(parents=True, exist_ok=True)
-    return output_root
 
 
 @celery_app.task(name="z_image.generate_image")
@@ -54,7 +37,7 @@ def generate_image_task(
         seed=seed,
     )
 
-    output_root = _get_output_root()
+    output_root = get_output_root()
     dated_dir = output_root / now.strftime("%Y%m%d")
     dated_dir.mkdir(parents=True, exist_ok=True)
 
@@ -76,4 +59,3 @@ def generate_image_task(
         "output_path": str(output_path),
         "relative_path": str(relative_path),
     }
-

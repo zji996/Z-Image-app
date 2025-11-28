@@ -7,16 +7,15 @@ FastAPI 后端服务，提供 Z-Image 的 HTTP API（排队生成图片）。
 1. 启动本地依赖（Postgres / Redis）：
 
 ```bash
-scripts/dev_up.sh
+scripts/dev_deps_up.sh  # legacy: scripts/dev_infra_up.sh / scripts/dev_up.sh
 ```
 
 2. 在 `apps/api` 创建并编辑 `.env`（参考 `.env.example`）。
 
-3. 使用 `uv` 启动开发服务器（也可以使用 Python 虚拟环境）：
+3. 使用 `uv` 启动开发服务器（在仓库根目录执行）：
 
 ```bash
-cd apps/api
-uv run uvicorn apps.api.main:app --reload --host 0.0.0.0 --port 8000
+uv run --project apps/api uvicorn apps.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 主要接口
@@ -28,4 +27,4 @@ uv run uvicorn apps.api.main:app --reload --host 0.0.0.0 --port 8000
 - 查询任务状态：`GET /v1/tasks/{task_id}`
   - 返回任务状态（`PENDING`/`STARTED`/`SUCCESS`/`FAILURE`）以及生成结果元数据。
 - 静态图片访问：`GET /generated-images/<date>/<filename>.png`
-  - 生成任务会把图片保存到 `MODELS_DIR/z-image-outputs` 下，并通过该静态路径暴露。
+  - 默认情况下，生成任务会把图片保存到仓库根目录下的 `outputs/z-image-outputs` 中（可通过 `Z_IMAGE_OUTPUT_DIR` 环境变量自定义），并通过该静态路径暴露。

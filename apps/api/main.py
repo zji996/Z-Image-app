@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -9,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from libs.py_core.celery_app import celery_app
-from libs.py_core.config import get_settings
+from libs.py_core.config import get_output_root, get_settings
 from libs.py_core.tasks import generate_image_task
 
 
@@ -89,6 +88,5 @@ async def get_task_status(task_id: str) -> TaskStatusResponse:
     return TaskStatusResponse(task_id=task_id, status=status, result=payload, error=error)
 
 
-output_root = (settings.models_dir / os.getenv("Z_IMAGE_OUTPUT_SUBDIR", "z-image-outputs")).resolve()
-output_root.mkdir(parents=True, exist_ok=True)
+output_root = get_output_root()
 app.mount("/generated-images", StaticFiles(directory=str(output_root)), name="generated-images")

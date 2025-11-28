@@ -7,7 +7,7 @@ Celery 异步任务 Worker。
 1. 启动本地 Redis（和 Postgres）：
 
 ```bash
-scripts/dev_up.sh
+scripts/dev_deps_up.sh  # legacy: scripts/dev_infra_up.sh / scripts/dev_up.sh
 ```
 
 2. 在 `apps/worker` 创建 `.env`（参考 `.env.example`）。

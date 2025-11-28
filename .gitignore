@@ -26,3 +26,8 @@ apps/*/.env
 .pytest_cache/
 .mypy_cache/
 
+# Local logs
+logs/
+
+# Generated image outputs
+outputs/

@@ -86,7 +86,7 @@ repo_root/
 
 ## 开发脚本
 
-- `scripts/dev_up.sh` / `scripts/dev_down.sh`：本地依赖（DB / Redis）启动与停止。
+- `scripts/dev_deps_up.sh` / `scripts/dev_deps_down.sh`：本地依赖（DB / Redis）启动与停止（`dev_up.sh` / `dev_down.sh` / `dev_infra_*.sh` 为兼容保留的别名）。
 - `scripts/dev_api.sh`：本地启动 FastAPI（基于 `uv`）。
 - `scripts/dev_worker.sh`：本地启动 Celery worker。
 - `scripts/dev_web.sh`：本地启动前端 Vite 开发服务器。

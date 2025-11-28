@@ -11,8 +11,8 @@ This guide is for all contributors and agents working in this monorepo.
 ## Environment, Build & Development
 
 - Local services (PostgreSQL 17, Redis 7): `docker compose -f infra/docker-compose.dev.yml up -d`.
-- Python (FastAPI, Celery) uses `uv` per app: keep `pyproject.toml` + `uv.lock` in each app. Install/sync with `uv sync`, run with `uv run main.py` or via scripts in `scripts/`.
-- Frontend uses Vite + React + Tailwind v4: run `pnpm install` (or `npm install`) and `pnpm dev` / `npm run dev` inside the app directory.
+- Python (FastAPI, Celery) uses `uv` per app: each `apps/*` Python app has its own `pyproject.toml` + `uv.lock`; manage deps with `uv add/remove/sync` (letting `uv sync` create local `.venv/` that stay untracked), and run from the repo root with `uv run --project apps/api ...` / `uv run --project apps/worker ...` or via scripts in `scripts/` so imports from `apps/` and `libs/` work without touching `sys.path`.
+- Frontend uses Vite + React + Tailwind v4: prefer `pnpm` (`pnpm install`, `pnpm dev`) inside `apps/web`; fall back to `npm` only if needed.
 - Each app maintains its own `.env` (untracked) and `.env.example` (tracked). Use env vars for all configuration (DB, Redis, `MODELS_DIR`); never hard‑code secrets or paths.
 
 ## Coding, Testing & Tooling
