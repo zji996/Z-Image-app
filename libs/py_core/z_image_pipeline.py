@@ -89,7 +89,6 @@ def get_zimage_pipeline(device: str | None = None, model_id: str | None = None):
     settings = get_settings()
     models_dir: Path = settings.models_dir
 
-    # 变体选择，默认为 turbo
     variant = os.getenv("Z_IMAGE_VARIANT", "turbo").lower()
     variant_cfg = _VARIANT_REGISTRY.get(variant)
     if variant_cfg is None:
@@ -106,12 +105,15 @@ def get_zimage_pipeline(device: str | None = None, model_id: str | None = None):
 
     local_dir = (models_dir / local_subdir).resolve()
 
+    env_device = os.getenv("Z_IMAGE_DEVICE")
+    requested_device = device or env_device
+
     if torch.cuda.is_available():  # pragma: no cover - hardware dependent
         dtype = torch.bfloat16
-        target_device = device or "cuda"
+        target_device = requested_device or "cuda"
     else:  # pragma: no cover - hardware dependent
         dtype = torch.float32
-        target_device = device or "cpu"
+        target_device = requested_device or "cpu"
 
     # 如果本地已经通过 scripts/download_models.py 拉取过对应变体，优先从本地加载
     if local_dir.exists():
@@ -129,3 +131,37 @@ def get_zimage_pipeline(device: str | None = None, model_id: str | None = None):
     )
     pipe.to(target_device)
     return pipe
+
+
+def generate_image(
+    *,
+    prompt: str,
+    height: int = 1024,
+    width: int = 1024,
+    num_inference_steps: int = 9,
+    guidance_scale: float = 0.0,
+    seed: int | None = None,
+):
+    """
+    Helper for running a single Z-Image generation step using the shared
+    pipeline configuration.
+    """
+
+    torch, _ = _ensure_runtime()
+
+    pipeline = get_zimage_pipeline()
+
+    generator = None
+    if seed is not None:
+        device = getattr(pipeline, "device", None) or "cuda" if torch.cuda.is_available() else "cpu"
+        generator = torch.Generator(device=device).manual_seed(seed)
+
+    result = pipeline(
+        prompt=prompt,
+        height=height,
+        width=width,
+        num_inference_steps=num_inference_steps,
+        guidance_scale=guidance_scale,
+        generator=generator,
+    )
+    return result.images[0]
