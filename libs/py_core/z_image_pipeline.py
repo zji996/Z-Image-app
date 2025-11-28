@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
+import json
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +70,154 @@ def _ensure_runtime() -> tuple[Any, Any]:
         ) from exc
 
     return torch, ZImagePipeline
+
+
+def _maybe_enable_dfloat11(
+    pipe: Any,
+    *,
+    torch: Any,
+    models_dir: Path,
+    local_subdir: Path,
+) -> None:
+    """
+    Optionally wrap Z-Image components with DFloat11 compressed weights.
+
+    Controlled via environment variables:
+      - Z_IMAGE_USE_DF11: enable DF11 for the main transformer.
+      - Z_IMAGE_DF11_DIR: override DF11 directory for the transformer.
+      - Z_IMAGE_USE_DF11_TEXT: enable DF11 for the text encoder.
+      - Z_IMAGE_TEXT_DF11_DIR: override DF11 directory for the text encoder.
+
+    When enabled, this expects that:
+      - The `dfloat11` package is installed in the worker environment.
+      - You have already run `scripts/compress_z_image_dfloat11.py` to create
+        compressed weights (for the relevant component).
+    """
+
+    def _flag_enabled(name: str) -> bool:
+        value = os.getenv(name, "").strip().lower()
+        return value in {"1", "true", "yes"}
+
+    use_transformer = _flag_enabled("Z_IMAGE_USE_DF11")
+    use_text_encoder = _flag_enabled("Z_IMAGE_USE_DF11_TEXT")
+
+    if not (use_transformer or use_text_encoder):
+        return
+
+    # DFloat11 is only useful (and tested) on CUDA.
+    if not torch.cuda.is_available():  # pragma: no cover - hardware dependent
+        return
+
+    try:
+        # Imported lazily so that non-DF11 deployments do not require this extra dep.
+        from libs.py_core.dfloat11_ext import DFloat11Model  # type: ignore[import-not-found]
+    except Exception as exc:  # pragma: no cover - runtime only
+        raise ZImageNotAvailable(
+            "DFloat11 is required but not available. Install it in the worker "
+            "environment, e.g.: `uv add \"dfloat11[cuda12]\" --project apps/worker`."
+        ) from exc
+
+    # Helper for configuring a single component.
+    def _configure_component(
+        *,
+        component_name: str,
+        module: Any,
+        default_suffix: str,
+        env_dir_var: str,
+    ) -> None:
+        df11_dir_env = os.getenv(env_dir_var)
+        if df11_dir_env:
+            df11_dir = Path(df11_dir_env).expanduser().resolve()
+        else:
+            df11_dir = (models_dir / (str(local_subdir) + default_suffix)).resolve()
+
+        if not df11_dir.exists():
+            raise ZImageNotAvailable(
+                f"DFloat11 is enabled for {component_name}, but the weights directory "
+                f"was not found at '{df11_dir}'. Run "
+                f"`uv run --project apps/worker python scripts/compress_z_image_dfloat11.py "
+                f"--component {component_name}` first (or set {env_dir_var} to the correct path)."
+            )
+
+        # Best-effort sanity check: if our local DF11 config explicitly records
+        # which logical component it was generated from, verify it matches what
+        # we are about to hook into. This helps catch mistakes such as
+        # compressing `transformer` but pointing Z_IMAGE_TEXT_DF11_DIR at it.
+        cfg_path = df11_dir / "config.json"
+        if cfg_path.exists():
+            try:
+                data = json.loads(cfg_path.read_text(encoding="utf-8"))
+            except Exception:  # pragma: no cover - best effort only
+                data = None
+
+            if isinstance(data, dict):
+                annotated = data.get("z_image_component")
+                if isinstance(annotated, str) and annotated != component_name:
+                    raise ZImageNotAvailable(
+                        "DFloat11 weights component mismatch: "
+                        f"config at '{df11_dir}' is tagged as '{annotated}', "
+                        f"but you attempted to attach it to '{component_name}'. "
+                        f"Please regenerate DF11 weights with "
+                        f"`--component {component_name}` or point {env_dir_var} "
+                        "to the correct directory."
+                    )
+
+        # Optional CPU offload: keep DF11 compressed tensors on CPU and only
+        # stream per-block data to GPU during decode. This trades throughput
+        # for lower steady-state VRAM.
+        if component_name == "transformer":
+            cpu_offload_flag = "Z_IMAGE_DF11_CPU_OFFLOAD"
+            cpu_offload_blocks_flag = "Z_IMAGE_DF11_CPU_OFFLOAD_BLOCKS"
+        elif component_name == "text_encoder":
+            cpu_offload_flag = "Z_IMAGE_TEXT_DF11_CPU_OFFLOAD"
+            cpu_offload_blocks_flag = "Z_IMAGE_TEXT_DF11_CPU_OFFLOAD_BLOCKS"
+        else:
+            cpu_offload_flag = ""
+            cpu_offload_blocks_flag = ""
+
+        cpu_offload = bool(cpu_offload_flag and _flag_enabled(cpu_offload_flag))
+        cpu_offload_blocks: int | None = None
+        if cpu_offload and cpu_offload_blocks_flag:
+            raw = os.getenv(cpu_offload_blocks_flag)
+            if raw:
+                try:
+                    value = int(raw)
+                    if value > 0:
+                        cpu_offload_blocks = value
+                except ValueError:
+                    cpu_offload_blocks = None
+
+        try:
+            DFloat11Model.from_pretrained(
+                str(df11_dir),
+                device="cpu",
+                bfloat16_model=module,
+                cpu_offload=cpu_offload,
+                cpu_offload_blocks=cpu_offload_blocks,
+                pin_memory=True,
+            )
+        except Exception as exc:  # pragma: no cover - runtime only
+            raise ZImageNotAvailable(
+                f"Failed to configure DFloat11 for {component_name} from '{df11_dir}'. "
+                "Please verify the compressed weights were generated with the "
+                "current model version."
+            ) from exc
+
+    if use_transformer:
+        _configure_component(
+            component_name="transformer",
+            module=pipe.transformer,
+            default_suffix="-df11",
+            env_dir_var="Z_IMAGE_DF11_DIR",
+        )
+
+    if use_text_encoder:
+        _configure_component(
+            component_name="text_encoder",
+            module=pipe.text_encoder,
+            default_suffix="-text-encoder-df11",
+            env_dir_var="Z_IMAGE_TEXT_DF11_DIR",
+        )
 
 
 @lru_cache(maxsize=1)
@@ -129,6 +278,16 @@ def get_zimage_pipeline(device: str | None = None, model_id: str | None = None):
         low_cpu_mem_usage=False,
         **extra_kwargs,
     )
+
+    # Optionally wrap transformer weights with DFloat11 for VRAM savings on
+    # single 20GB GPUs, when explicitly enabled via env vars.
+    _maybe_enable_dfloat11(
+        pipe,
+        torch=torch,
+        models_dir=models_dir,
+        local_subdir=local_subdir,
+    )
+
     pipe.to(target_device)
     return pipe
 
