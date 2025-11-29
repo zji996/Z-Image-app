@@ -6,6 +6,11 @@ LOG_DIR="${REPO_ROOT}/logs"
 
 mkdir -p "${LOG_DIR}"
 
+# Best-effort: stop any existing dev processes before starting new ones.
+echo "Stopping existing dev services (if any)..."
+bash "${REPO_ROOT}/scripts/dev_stop.sh" || true
+echo
+
 API_LOG="${LOG_DIR}/api.dev.log"
 WEB_LOG="${LOG_DIR}/web.dev.log"
 WORKER_LOG="${LOG_DIR}/worker.dev.log"

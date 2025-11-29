@@ -339,45 +339,59 @@ uv run --project apps/worker python -m scripts.compare_safetensors_state_dicts \
   [DF11] The two safetensors files are exactly identical.
   ```
 
-### 8.5 推理时挂载多个阶段的 DF11 权重
+### 8.5 推理时使用 DF11-only 模式
 
 文件：`libs/py_core/z_image_pipeline.py`
 
-- `_maybe_enable_dfloat11` 支持同时为多个组件挂 DF11 hook：
-  - 主干 transformer：
-    - `Z_IMAGE_USE_DF11=1`
-    - `Z_IMAGE_DF11_DIR=/绝对路径/到/transformer 的 DF11 目录`
-    - 若不指定目录，默认：`MODELS_DIR / (local_subdir + "-df11")`。
-  - text_encoder（Qwen3）：
-    - `Z_IMAGE_USE_DF11_TEXT=1`
-    - `Z_IMAGE_TEXT_DF11_DIR=/绝对路径/到/text_encoder 的 DF11 目录`
-    - 若不指定目录，默认：`MODELS_DIR / (local_subdir + "-text-encoder-df11")`。
-- 函数内部逻辑：
-  - 检查对应目录是否存在 `config.json`+`.safetensors`；
-  - 调用 `DFloat11Model.from_pretrained(..., bfloat16_model=module, device="cpu")` 在 **现有 PyTorch module 上原位注册 DF11 读取 hook**；
-  - 随后 `pipe.to("cuda")` 会把 DF11 的 buffers 一起搬到 GPU，推理时按 block 在 GPU 上即时解压。
-  - 可以通过环境变量为 DF11 启用 **CPU offload**，进一步降低显存占用（权重常驻 CPU pinned 内存，只在每个 block 计算前把 bitstream 拷到 GPU）：
-    - `Z_IMAGE_DF11_CPU_OFFLOAD=1`：对 transformer 启用 DF11 的 CPU offload；
-    - `Z_IMAGE_DF11_CPU_OFFLOAD_BLOCKS=...`：限制最多 offload 的 block 数（不设或设为 `<=0` 表示所有 block）；
-    - `Z_IMAGE_TEXT_DF11_CPU_OFFLOAD=1` / `Z_IMAGE_TEXT_DF11_CPU_OFFLOAD_BLOCKS=...`：同理，但作用于 text_encoder（目前 text_encoder 的 DF11 在本仓库中仍标记为实验性）。
+- 运行时通过 `get_zimage_pipeline()` 构建统一的 Z-Image pipeline。
+- 若设置 `Z_IMAGE_USE_DF11=1`，则进入 **DF11-only** 模式：
+  - 不再依赖本地完整的浮点 Turbo 仓库；
+  - 仅依赖一个已经构建好的 DF11 仓库（例如 `models/z-image-turbo-df11`）。
 
-典型 `.env`：
+DF11 仓库需要具备以下结构（以 Turbo 为例）：
 
-```env
-Z_IMAGE_USE_DF11=1
-Z_IMAGE_USE_DF11_TEXT=1
+- `scheduler/`：调度器配置；
+- `vae/`：VAE 全精度权重；
+- `tokenizer/`：分词器；
+- `text_encoder/`：Qwen3 文本编码器的 DF11 config + `model.safetensors`；
+- `transformer/`：Z-Image DiT 主干的 DF11 config + `model.safetensors`。
 
-# 如路径就是:
-#   models/z-image-turbo-df11-fast/transformer
-#   models/z-image-turbo-text-encoder-df11/text_encoder
-# 则可以显式指定（也可以依赖默认）
-Z_IMAGE_DF11_DIR=/home/you/Z-Image-app/models/z-image-turbo-df11-fast/transformer
-Z_IMAGE_TEXT_DF11_DIR=/home/you/Z-Image-app/models/z-image-turbo-text-encoder-df11/text_encoder
-```
+运行模式：
 
-另外，压缩脚本会在 DF11 目录下的 `config.json` 里写入 `z_image_component` 字段；
-推理阶段 `_maybe_enable_dfloat11` 会校验这个字段是否和要挂载的组件一致，
-如果把 transformer 的 DF11 权重误指到了 text_encoder，加载时会直接报错，避免静默使用错模型。
+- 默认情况下，`get_zimage_pipeline` 会从：
+
+  - 本地 `MODELS_DIR/z-image-turbo`（若存在）；否则
+  - 远端 `Tongyi-MAI/Z-Image-Turbo`，
+
+  加载完整浮点权重。
+
+- 当设置：
+
+  ```env
+  Z_IMAGE_VARIANT=turbo
+  Z_IMAGE_USE_DF11=1
+  ```
+
+  时，代码会改为：
+
+  - 从 DF11 仓库中分别加载 `scheduler` / `vae` / `tokenizer` 配置；
+  - 只根据 DF11 目录下的 `config.json` 构造 Qwen3 文本编码器和 Z-Image DiT 架构；
+  - 调用 `DFloat11Model.from_pretrained(...)` 在这些模块上注册 DF11 解码 hook，按 block 即时解压。
+
+DF11 仓库位置：
+
+- 默认 DF11 根目录为：
+
+  ```text
+  $MODELS_DIR/z-image-turbo-df11
+  ```
+
+- 也可以通过 `Z_IMAGE_DF11_ROOT` 自定义：
+
+  ```env
+  Z_IMAGE_USE_DF11=1
+  Z_IMAGE_DF11_ROOT=/home/you/path/to/z-image-turbo-df11
+  ```
 
 ### 8.6 Qwen3 text_encoder 的 CUDA_ERROR_INVALID_VALUE 调试记录
 
