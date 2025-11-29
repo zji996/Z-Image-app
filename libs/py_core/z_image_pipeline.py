@@ -165,6 +165,15 @@ def _maybe_enable_dfloat11(
         # Optional CPU offload: keep DF11 compressed tensors on CPU and only
         # stream per-block data to GPU during decode. This trades throughput
         # for lower steady-state VRAM.
+        #
+        # We support both a global toggle (Z_IMAGE_DF11_CPU_OFFLOAD) and
+        # per-component overrides (Z_IMAGE_TEXT_DF11_CPU_OFFLOAD, etc.). The
+        # per-component flag wins when explicitly set; otherwise the text
+        # encoder will fall back to the global setting so that a single env
+        # variable can enable offload for both transformer and text encoder.
+        global_cpu_offload_flag = "Z_IMAGE_DF11_CPU_OFFLOAD"
+        global_cpu_offload_blocks_flag = "Z_IMAGE_DF11_CPU_OFFLOAD_BLOCKS"
+
         if component_name == "transformer":
             cpu_offload_flag = "Z_IMAGE_DF11_CPU_OFFLOAD"
             cpu_offload_blocks_flag = "Z_IMAGE_DF11_CPU_OFFLOAD_BLOCKS"
@@ -175,10 +184,29 @@ def _maybe_enable_dfloat11(
             cpu_offload_flag = ""
             cpu_offload_blocks_flag = ""
 
-        cpu_offload = bool(cpu_offload_flag and _flag_enabled(cpu_offload_flag))
+        # First look at the component-specific flag; if it is unset for the
+        # text encoder, fall back to the global DF11 flag so that
+        # Z_IMAGE_DF11_CPU_OFFLOAD=1 affects both components by default.
+        cpu_offload = False
+        if cpu_offload_flag:
+            local_raw = os.getenv(cpu_offload_flag)
+            if local_raw is not None:
+                cpu_offload = _flag_enabled(cpu_offload_flag)
+            elif component_name == "text_encoder":
+                cpu_offload = _flag_enabled(global_cpu_offload_flag)
+
         cpu_offload_blocks: int | None = None
-        if cpu_offload and cpu_offload_blocks_flag:
-            raw = os.getenv(cpu_offload_blocks_flag)
+        if cpu_offload:
+            raw: str | None = None
+
+            if cpu_offload_blocks_flag:
+                raw = os.getenv(cpu_offload_blocks_flag)
+
+            # If there is no per-component limit for the text encoder, fall
+            # back to the global DF11 blocks limit.
+            if not raw and component_name == "text_encoder":
+                raw = os.getenv(global_cpu_offload_blocks_flag)
+
             if raw:
                 try:
                     value = int(raw)

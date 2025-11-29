@@ -46,13 +46,28 @@ def compress_model(
     if block_range is None:
         block_range = [0, 10000]
 
-    # Preserve the original global setting so we don't affect callers
-    # outside this wrapper.
-    old_threads = getattr(_dfloat11, "threads_per_block", None)
+    # The upstream implementation stores the CUDA launch config as a
+    # module-level global in ``dfloat11.dfloat11`` and exposes a thin
+    # package wrapper in ``dfloat11/__init__.py``. Importing the package
+    # as ``dfloat11`` therefore does *not* give us direct access to the
+    # ``threads_per_block`` global that ``compress_model`` reads.
+    #
+    # Here we resolve the concrete implementation module from the
+    # function object itself and patch its ``threads_per_block`` global,
+    # so both compression and the generated ``dfloat11_config`` capture
+    # the overridden value.
+    import sys
+
+    impl_module_name = getattr(_dfloat11.compress_model, "__module__", None)
+    impl_module = sys.modules.get(impl_module_name, _dfloat11)
+
+    # Preserve the original setting so we don't affect callers outside
+    # this wrapper.
+    old_threads = getattr(impl_module, "threads_per_block", None)
 
     try:
         if threads_per_block_override is not None:
-            _dfloat11.threads_per_block = (int(threads_per_block_override),)
+            impl_module.threads_per_block = (int(threads_per_block_override),)
 
         _dfloat11.compress_model(
             model=model,
@@ -64,4 +79,4 @@ def compress_model(
         )
     finally:
         if old_threads is not None:
-            _dfloat11.threads_per_block = old_threads
+            impl_module.threads_per_block = old_threads

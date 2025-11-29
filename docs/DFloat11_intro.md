@@ -379,6 +379,117 @@ Z_IMAGE_TEXT_DF11_DIR=/home/you/Z-Image-app/models/z-image-turbo-text-encoder-df
 推理阶段 `_maybe_enable_dfloat11` 会校验这个字段是否和要挂载的组件一致，
 如果把 transformer 的 DF11 权重误指到了 text_encoder，加载时会直接报错，避免静默使用错模型。
 
+### 8.6 Qwen3 text_encoder 的 CUDA_ERROR_INVALID_VALUE 调试记录
+
+在把 Qwen3 text_encoder 也切到 DF11 时，遇到过一个比较隐蔽的问题：  
+推理阶段一旦打开 `Z_IMAGE_USE_DF11_TEXT=1`，在 DF11 的 decode kernel 里报：
+
+```text
+cupy_backends.cuda.api.driver.CUDADriverError: CUDA_ERROR_INVALID_VALUE: invalid argument
+```
+
+调用栈落在：
+
+- `dfloat11/dfloat11.py:decode_hook` → `_decode(..., shared_mem=module.shared_mem_size, ...)`
+- `cupy.cuda.function.Function.__call__` → `launchKernel` → `CUDA_ERROR_INVALID_VALUE`
+
+#### 根因：单 block shared memory 超过 GPU 上限
+
+DF11 的 decode kernel 使用 per-block shared memory，大小由 `output_positions` 和 `threads_per_block` 决定：
+
+```python
+output_positions_np = output_positions.view(torch.uint32).numpy()
+shared_mem_size = threads_per_block[0] * 4 + 4 + (output_positions_np[1:] - output_positions_np[:-1]).max().item() * 2
+```
+
+在我们用 RTX 3080（`shared_memory_per_block = 49152`）+ 默认 `threads_per_block = (512,)` 的 DF11 text_encoder 上，  
+对某个 block（`layers.35.mlp.up_proj`）实测：
+
+```text
+max_delta(output_positions) = 32768
+shared_mem_size = 512*4 + 4 + 32768*2 = 67588  >  49152
+```
+
+也就是说，DF11 kernel 想申请 ~66KB 的 shared memory，而 3080 单 block 只有 48KB，于是 CUDA 直接返回 `INVALID_VALUE`。
+
+#### 诊断方法（用 uv 跑的脚本）
+
+可以离线检查某个 DF11 模型（以 text_encoder 为例）对当前 GPU 是否安全：
+
+```bash
+uv run --project apps/worker python - << 'PY'
+from pathlib import Path
+
+import torch
+from safetensors.torch import load_file
+
+root = Path("models/z-image-turbo-text-encoder-df11/text_encoder")
+
+props = torch.cuda.get_device_properties(0)
+print("shared_memory_per_block:", props.shared_memory_per_block)
+
+sd = load_file(str(root / "model.safetensors"))
+
+threads_per_block = 512  # 或读取 config.json 里的 dfloat11_config.threads_per_block[0]
+worst = None
+for name, t in sd.items():
+    if name.endswith("output_positions"):
+        arr = t.view(torch.uint32).cpu().numpy()
+        if arr.size < 2:
+            continue
+        diffs = (arr[1:] - arr[:-1]).max().item()
+        shared_mem_size = threads_per_block * 4 + 4 + diffs * 2
+        if worst is None or shared_mem_size > worst[0]:
+            worst = (shared_mem_size, diffs, name)
+
+print("Worst shared_mem_size:", worst)
+PY
+```
+
+如果 `Worst shared_mem_size[0] > shared_memory_per_block`，就说明当前这份 DF11 模型在这块卡上会触发 `CUDA_ERROR_INVALID_VALUE`。
+
+#### 修复方案：压缩时下调 text_encoder 的 threads_per_block
+
+解决思路是：**压缩 text_encoder 时就用更小的 `threads_per_block`**，让每个 DF11 block 覆盖的元素数变小，从而降低 shared memory 需求。
+
+本仓库里已经在 parallel 脚本里针对 text_encoder 写死了 override：
+
+- 文件：`scripts/compress_z_image_dfloat11_parallel.py`
+- 对 text_encoder 会传：`--threads-per-block-override 256` 给单进程脚本
+
+推荐压缩命令（使用 parallel 版本）：
+
+```bash
+uv run --project apps/worker python -m scripts.compress_z_image_dfloat11_parallel \
+  --component text_encoder \
+  --model-path models/z-image-turbo \
+  --save-path models/z-image-turbo-text-encoder-df11/text_encoder \
+  --blocks-per-task 16 \
+  --max-workers 3 \
+  --save-single-file \
+  --no-check-correctness
+```
+
+注意：我们在 `libs/py_core/dfloat11_ext.py` 里对 DF11 的 `compress_model` 做了一层 wrapper，  
+确保 `threads_per_block_override` 真正改到的是 `dfloat11.dfloat11.threads_per_block` 这个全局变量，  
+这样生成的 `config.json` 里的 `dfloat11_config.threads_per_block` 才会变成 `[256]`，而不是一直停留在 `[512]`。
+
+压缩完成后可以用上面的诊断脚本再跑一遍，把 `threads_per_block` 换成 256，确认：
+
+```text
+Worst shared_mem_size[0] <= shared_memory_per_block
+```
+
+最后，在 worker 的 `.env` 里挂载新的 text_encoder DF11 目录：
+
+```env
+Z_IMAGE_USE_DF11_TEXT=1
+Z_IMAGE_TEXT_DF11_DIR=models/z-image-turbo-text-encoder-df11/text_encoder
+```
+
+对 20GB + 48KB shared memory 的消费级卡（如 RTX 3080），`threads_per_block=256` 在当前 Qwen3 text_encoder 设置下能够避免 shared memory 超限，  
+transformer 部分则可以继续使用默认的 DF11 配置。
+
 这样整条多阶段链路（text_encoder + transformer）都会吃到 DF11 的显存节省，同时保持 bit-exact 行为。
 在显存特别紧张的 20GB 卡上，还可以额外打开：
 
