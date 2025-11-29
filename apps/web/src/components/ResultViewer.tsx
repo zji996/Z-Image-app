@@ -16,7 +16,7 @@ export function ResultViewer({ status, imageUrl, error, generationTime }: Result
         </div>
         <h3 className="text-lg font-medium text-slate-400 mb-2">Ready to Create</h3>
         <p className="text-sm text-center max-w-xs">
-          Enter a prompt and settings on the left to generate your first image with Z-Image-Turbo.
+          Enter a prompt and settings on the left to generate your first image.
         </p>
       </div>
     );
@@ -28,7 +28,6 @@ export function ResultViewer({ status, imageUrl, error, generationTime }: Result
         <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent" />
         <Loader2 className="size-16 text-cyan-500 animate-spin mb-6" />
         <h3 className="text-lg font-medium text-slate-200 animate-pulse">Generating...</h3>
-        <p className="text-sm text-slate-500 mt-2">Connecting to H800 GPU Cluster</p>
       </div>
     );
   }
@@ -62,9 +61,7 @@ export function ResultViewer({ status, imageUrl, error, generationTime }: Result
               Inference: {generationTime.toFixed(2)}s
             </p>
           )}
-          <p className="text-xs text-slate-400">
-            1024x1024 • Z-Image-Turbo
-          </p>
+          <p className="text-xs text-slate-400">1024x1024</p>
         </div>
         <div className="flex space-x-2">
           <a

@@ -1,5 +1,5 @@
 export interface GenerateImageRequest {
-  prompt: str;
+  prompt: string;
   height?: number;
   width?: number;
   num_inference_steps?: number;
@@ -29,4 +29,14 @@ export interface TaskStatusResponse {
   status: "PENDING" | "STARTED" | "SUCCESS" | "FAILURE" | "RETRY" | "REVOKED";
   result?: TaskResult;
   error?: string;
+}
+
+export interface TaskSummary {
+  task_id: string;
+  status: string;
+  created_at?: string;
+  prompt?: string;
+  height?: number;
+  width?: number;
+  relative_path?: string;
 }

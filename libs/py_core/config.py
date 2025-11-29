@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     models_dir: Path = Path(os.getenv("MODELS_DIR", DEFAULT_MODELS_DIR))
     outputs_dir: Path = Path(os.getenv("Z_IMAGE_OUTPUT_DIR", DEFAULT_OUTPUTS_DIR))
 
+    # Simple API key auth for the HTTP layer (used by apps/api).
+    # When `api_enable_auth` is true, requests must provide an auth key,
+    # and an optional admin key can bypass per-user restrictions.
+    api_enable_auth: bool = False
+    api_admin_key: str | None = None
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
@@ -49,4 +55,3 @@ def get_output_root() -> Path:
     output_root = settings.outputs_dir.resolve()
     output_root.mkdir(parents=True, exist_ok=True)
     return output_root
-

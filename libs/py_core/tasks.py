@@ -19,6 +19,7 @@ def generate_image_task(
     num_inference_steps: int = 9,
     guidance_scale: float = 0.0,
     seed: int | None = None,
+    auth_key: str | None = None,
 ) -> Dict[str, Any]:
     """
     Celery task that runs a Z-Image generation job and saves
@@ -56,6 +57,7 @@ def generate_image_task(
         "guidance_scale": guidance_scale,
         "seed": seed,
         "created_at": now.isoformat(),
+        "auth_key": auth_key,
         "output_path": str(output_path),
         "relative_path": str(relative_path),
     }
