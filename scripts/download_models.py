@@ -56,6 +56,15 @@ MODEL_REGISTRY: Dict[str, ModelConfig] = {
         # 你给的链接是 ModelScope，因此默认优先 ModelScope
         default_source="modelscope",
     ),
+    "z_image_turbo_df11": ModelConfig(
+        key="z_image_turbo_df11",
+        display_name="Z-Image-Turbo (DF11 bundle)",
+        local_subdir="z-image-turbo-df11",
+        sources={
+            "modelscope": "kuohao/z-image-turbo-df11",
+        },
+        default_source="modelscope",
+    ),
     # 预留：Base / Edit 变体当前尚未开放下载，仅做占位，便于后续兼容
     "z_image_base": ModelConfig(
         key="z_image_base",
@@ -86,7 +95,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--source",
         choices=["huggingface", "modelscope"],
-        help="托管平台：huggingface 或 modelscope",
+        help="托管平台：huggingface 或 modelscope（某些模型可能只支持其一）",
     )
     parser.add_argument(
         "--revision",

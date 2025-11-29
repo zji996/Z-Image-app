@@ -6,6 +6,16 @@ LOG_DIR="${REPO_ROOT}/logs"
 
 mkdir -p "${LOG_DIR}"
 
+# 确保 DF11 模型在首次启动时已下载到 MODELS_DIR/z-image-turbo-df11。
+# 若目录已存在，则 download_models.py 会直接复用并避免重复拉取。
+if ! [ -d "${MODELS_DIR:-${REPO_ROOT}/models}/z-image-turbo-df11" ]; then
+    echo "[dev_all] Detected missing DF11 bundle, downloading via scripts/download_models.py ..."
+    bash "${REPO_ROOT}/scripts/download_models.sh" \
+        --model z_image_turbo_df11 \
+        --source modelscope \
+        --non-interactive || echo "[dev_all] DF11 download failed, please run scripts/download_models.sh 手动下载。"
+fi
+
 # Best-effort: stop any existing dev processes before starting new ones.
 echo "Stopping existing dev services (if any)..."
 bash "${REPO_ROOT}/scripts/dev_stop.sh" || true
