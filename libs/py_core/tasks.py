@@ -19,7 +19,12 @@ def generate_image_task(
     num_inference_steps: int = 9,
     guidance_scale: float = 0.0,
     seed: int | None = None,
+    negative_prompt: str | None = None,
+    cfg_normalization: bool | None = None,
+    cfg_truncation: float | None = None,
+    max_sequence_length: int | None = None,
     auth_key: str | None = None,
+    metadata: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Celery task that runs a Z-Image generation job and saves
@@ -36,6 +41,10 @@ def generate_image_task(
         num_inference_steps=num_inference_steps,
         guidance_scale=guidance_scale,
         seed=seed,
+        negative_prompt=negative_prompt,
+        cfg_normalization=cfg_normalization,
+        cfg_truncation=cfg_truncation,
+        max_sequence_length=max_sequence_length,
     )
 
     output_root = get_output_root()
@@ -56,8 +65,13 @@ def generate_image_task(
         "num_inference_steps": num_inference_steps,
         "guidance_scale": guidance_scale,
         "seed": seed,
+        "negative_prompt": negative_prompt,
+        "cfg_normalization": cfg_normalization,
+        "cfg_truncation": cfg_truncation,
+        "max_sequence_length": max_sequence_length,
         "created_at": now.isoformat(),
         "auth_key": auth_key,
+        "metadata": metadata or {},
         "output_path": str(output_path),
         "relative_path": str(relative_path),
     }

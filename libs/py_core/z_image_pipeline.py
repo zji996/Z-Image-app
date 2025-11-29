@@ -483,6 +483,10 @@ def generate_image(
     num_inference_steps: int = 9,
     guidance_scale: float = 0.0,
     seed: int | None = None,
+    negative_prompt: str | None = None,
+    cfg_normalization: bool | None = None,
+    cfg_truncation: float | None = None,
+    max_sequence_length: int | None = None,
 ):
     """
     Helper for running a single Z-Image generation step using the shared
@@ -498,12 +502,25 @@ def generate_image(
         device = getattr(pipeline, "device", None) or "cuda" if torch.cuda.is_available() else "cpu"
         generator = torch.Generator(device=device).manual_seed(seed)
 
-    result = pipeline(
-        prompt=prompt,
-        height=height,
-        width=width,
-        num_inference_steps=num_inference_steps,
-        guidance_scale=guidance_scale,
-        generator=generator,
-    )
+    call_kwargs: dict[str, Any] = {
+        "prompt": prompt,
+        "height": height,
+        "width": width,
+        "num_inference_steps": num_inference_steps,
+        "guidance_scale": guidance_scale,
+        "generator": generator,
+    }
+
+    # 这些参数直接映射到 ZImagePipeline.__call__ 的可选项上，全部为可选，
+    # 以便未来扩展时不破坏现有调用。
+    if negative_prompt is not None:
+        call_kwargs["negative_prompt"] = negative_prompt
+    if cfg_normalization is not None:
+        call_kwargs["cfg_normalization"] = cfg_normalization
+    if cfg_truncation is not None:
+        call_kwargs["cfg_truncation"] = cfg_truncation
+    if max_sequence_length is not None:
+        call_kwargs["max_sequence_length"] = max_sequence_length
+
+    result = pipeline(**call_kwargs)
     return result.images[0]
