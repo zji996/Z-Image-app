@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Any, Dict, Optional
+import os
 
 from celery.result import AsyncResult
 from dotenv import load_dotenv
@@ -94,6 +95,16 @@ def get_auth_context(
             raise HTTPException(status_code=401, detail="Missing API auth key")
 
     is_admin = bool(admin_key) and raw_key == admin_key
+
+    # 可选：允许在环境变量 API_ALLOWED_KEYS 中配置允许访问的 Key 白名单，格式为
+    # 逗号分隔（例如 "key1,key2,key3"）。如果配置了白名单，则非管理员 Key 必须在
+    # 白名单中，否则直接拒绝访问。
+    allowed_raw = os.getenv("API_ALLOWED_KEYS", "").strip()
+    if settings.api_enable_auth and raw_key and not is_admin and allowed_raw:
+        allowed = {k.strip() for k in allowed_raw.split(",") if k.strip()}
+        if allowed and raw_key not in allowed:
+            raise HTTPException(status_code=403, detail="API key not allowed")
+
     return AuthContext(key=raw_key, is_admin=is_admin)
 
 
