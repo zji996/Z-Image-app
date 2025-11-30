@@ -4,10 +4,12 @@ import { PromptInput } from "./components/PromptInput";
 import { AdvancedSettings } from "./components/AdvancedSettings";
 import { ResultViewer } from "./components/ResultViewer";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { HistoryPage } from "./pages/HistoryPage";
 import { generateImage, getTaskStatus, getHistory, getImageUrl } from "./api/client";
 import type { TaskSummary } from "./api/types";
 
 const AUTH_STORAGE_KEY = "zimage_auth_key";
+type ViewMode = "studio" | "history";
 
 function App() {
   const [prompt, setPrompt] = useState("");
@@ -27,6 +29,10 @@ function App() {
 
   const [status, setStatus] = useState<"idle" | "pending" | "generating" | "success" | "error">("idle");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [lastSize, setLastSize] = useState<{ width: number; height: number } | null>({
+    width: 1024,
+    height: 1024,
+  });
   const [error, setError] = useState<string | undefined>();
   const [generationTime, setGenerationTime] = useState<number | undefined>();
   const [authKey, setAuthKey] = useState<string>(() => {
@@ -39,6 +45,7 @@ function App() {
   });
   const [historyItems, setHistoryItems] = useState<TaskSummary[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [activeView, setActiveView] = useState<ViewMode>("studio");
 
   const pollTimer = useRef<number | null>(null);
 
@@ -62,13 +69,9 @@ function App() {
   };
 
   const refreshHistory = async () => {
-    if (!authKey) {
-      setHistoryItems([]);
-      return;
-    }
     try {
       setIsHistoryLoading(true);
-      const items = await getHistory(authKey, 24);
+      const items = await getHistory(authKey || undefined, 24);
       setHistoryItems(items);
     } catch (err) {
       console.error("Failed to fetch history", err);
@@ -83,10 +86,17 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authKey]);
 
+  useEffect(() => {
+    if (activeView === "history") {
+      void refreshHistory();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView]);
+
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
 
-    setStatus("generating");
+    setStatus("pending");
     setError(undefined);
     setImageUrl(null);
     const startTime = performance.now();
@@ -105,6 +115,7 @@ function App() {
       );
 
       // Start polling
+      setStatus("generating");
       pollTimer.current = window.setInterval(async () => {
         try {
           const response = await getTaskStatus(task_id, authKey || undefined);
@@ -113,7 +124,8 @@ function App() {
             if (pollTimer.current) clearInterval(pollTimer.current);
             const endTime = performance.now();
             setGenerationTime((endTime - startTime) / 1000);
-            setImageUrl(getImageUrl(response.result.relative_path));
+            setImageUrl(getImageUrl(response.image_url || response.result.relative_path));
+            setLastSize({ width: response.result.width, height: response.result.height });
             setStatus("success");
             void refreshHistory();
           } else if (response.status === "FAILURE" || response.status === "REVOKED") {
@@ -139,58 +151,84 @@ function App() {
   };
 
   // Cleanup on unmount
-  // useEffect(() => {
-  //   return () => {
-  //     if (pollTimer.current) clearInterval(pollTimer.current);
-  //   };
-  // }, []);
+  useEffect(() => {
+    return () => {
+      if (pollTimer.current) clearInterval(pollTimer.current);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 font-sans selection:bg-cyan-500/30">
-      <Header authKey={authKey} onAuthKeyChange={handleAuthKeyChange} />
+      <Header
+        authKey={authKey}
+        onAuthKeyChange={handleAuthKeyChange}
+        activeView={activeView}
+        onChangeView={setActiveView}
+      />
 
       <main className="p-4 lg:p-8 overflow-y-auto h-[calc(100vh-73px)]">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column: Controls */}
-          <div className="space-y-6 order-2 lg:order-1">
-            <PromptInput
-              prompt={prompt}
-              setPrompt={setPrompt}
-              onGenerate={handleGenerate}
-              isGenerating={status === "generating" || status === "pending"}
-            />
+        <div className="max-w-6xl mx-auto">
+          {activeView === "studio" ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Left Column: Controls */}
+              <div className="space-y-6 order-2 lg:order-1">
+                <PromptInput
+                  prompt={prompt}
+                  setPrompt={setPrompt}
+                  onGenerate={handleGenerate}
+                  isGenerating={status === "generating" || status === "pending"}
+                />
 
-            <AdvancedSettings settings={settings} onChange={handleSettingsChange} />
+                <AdvancedSettings settings={settings} onChange={handleSettingsChange} />
 
-            <div className="pt-4 text-xs text-slate-600 leading-relaxed">
-              <p className="mb-2 font-semibold text-slate-500">Tips</p>
-              <ul className="list-disc pl-4 space-y-1">
-                <li>Short, descriptive prompts work best.</li>
-                <li>Try adding details like lighting, style, camera, etc.</li>
-                <li>Supports bilingual (English & Chinese) prompts.</li>
-              </ul>
+                <div className="pt-4 text-xs text-slate-600 leading-relaxed">
+                  <p className="mb-2 font-semibold text-slate-500">Tips</p>
+                  <ul className="list-disc pl-4 space-y-1">
+                    <li>Short, descriptive prompts work best.</li>
+                    <li>Try adding details like lighting, style, camera, etc.</li>
+                    <li>Supports bilingual (English & Chinese) prompts.</li>
+                  </ul>
+                </div>
+
+                <HistoryPanel
+                  items={historyItems}
+                  isLoading={isHistoryLoading}
+                  onSelectImage={(url) => {
+                    setImageUrl(url);
+                    setStatus("success");
+                  }}
+                  hasAuthKey={Boolean(authKey)}
+                />
+              </div>
+
+              {/* Right Column: Result */}
+              <div className="order-1 lg:order-2 min-h-[50vh]">
+                <ResultViewer
+                  status={status}
+                  imageUrl={imageUrl}
+                  error={error}
+                  generationTime={generationTime}
+                  width={lastSize?.width}
+                  height={lastSize?.height}
+                />
+              </div>
             </div>
-
-            <HistoryPanel
+          ) : (
+            <HistoryPage
               items={historyItems}
               isLoading={isHistoryLoading}
-              onSelectImage={(url) => {
+              authKey={authKey}
+              onRefresh={refreshHistory}
+              onSelectImage={(url, size) => {
                 setImageUrl(url);
+                if (size) {
+                  setLastSize(size);
+                }
                 setStatus("success");
+                setActiveView("studio");
               }}
-              hasAuthKey={Boolean(authKey)}
             />
-          </div>
-
-          {/* Right Column: Result */}
-          <div className="order-1 lg:order-2 min-h-[50vh]">
-            <ResultViewer
-              status={status}
-              imageUrl={imageUrl}
-              error={error}
-              generationTime={generationTime}
-            />
-          </div>
+          )}
         </div>
       </main>
     </div>

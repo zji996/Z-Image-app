@@ -5,6 +5,14 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd "${REPO_ROOT}"
 
+# Allow specifying GPU ID via either the GPU_ID env var or
+# as the first positional argument, e.g.:
+#   bash scripts/dev_worker.sh 0
+if [[ $# -ge 1 && -z "${GPU_ID:-}" ]]; then
+    export GPU_ID="$1"
+    shift
+fi
+
 # 首次启动时，尽力确保 DF11 模型已下载到 MODELS_DIR/z-image-turbo-df11。
 # 若目录已存在，则 download_models.py 会直接复用，无需重复拉取。
 if ! [ -d "${MODELS_DIR:-${REPO_ROOT}/models}/z-image-turbo-df11" ]; then

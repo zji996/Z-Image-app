@@ -21,6 +21,7 @@ from apps.api.auth import (
     build_image_url,
     enforce_task_access,
     get_auth_context,
+    get_auth_context_optional,
     redis_client,
     settings,
 )
@@ -122,7 +123,7 @@ async def get_task_status(
 async def list_history(
     limit: int = 20,
     offset: int = 0,
-    auth: AuthContext = Depends(get_auth_context),
+    auth: AuthContext = Depends(get_auth_context_optional),
 ) -> list[TaskSummary]:
     """
     Return a simple per-key history of recent tasks.
@@ -135,14 +136,12 @@ async def list_history(
     offset = max(0, offset)
 
     # Determine which Redis list to read from.
-    if auth.is_admin:
+    # - 管理员 key：查看全局历史（ALL_TASKS_KEY）
+    # - 未提供 key：也查看全局历史，用于开放式预览场景
+    # - 普通 key：只查看自己的任务列表
+    if auth.is_admin or not auth.key:
         redis_key = ALL_TASKS_KEY
     else:
-        if not auth.key:
-            # When auth is disabled globally, history without a key is empty.
-            if not settings.api_enable_auth:
-                return []
-            raise HTTPException(status_code=401, detail="Missing API auth key")
         redis_key = f"{USER_TASKS_KEY_PREFIX}{auth.key}"
 
     # Fetch a window of task IDs for this user/admin.
@@ -193,4 +192,3 @@ async def list_history(
         )
 
     return summaries
-

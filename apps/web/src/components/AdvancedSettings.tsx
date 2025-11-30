@@ -44,6 +44,7 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
                 <option value={512}>512 px</option>
                 <option value={768}>768 px</option>
                 <option value={1024}>1024 px</option>
+                <option value={1536}>1536 px</option>
               </select>
             </div>
             <div className="space-y-2">
@@ -56,6 +57,7 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
                 <option value={512}>512 px</option>
                 <option value={768}>768 px</option>
                 <option value={1024}>1024 px</option>
+                <option value={1536}>1536 px</option>
               </select>
             </div>
           </div>

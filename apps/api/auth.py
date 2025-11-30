@@ -35,12 +35,30 @@ class AuthContext(BaseModel):
     is_admin: bool = False
 
 
+def _resolve_auth_context(raw_key: Optional[str]) -> AuthContext:
+    """
+    Internal helper to resolve AuthContext and apply whitelist checks.
+    """
+
+    admin_key = settings.api_admin_key
+    is_admin = bool(admin_key) and raw_key == admin_key
+
+    # If a whitelist is configured, enforce it for non-admin keys.
+    allowed_raw = os.getenv("API_ALLOWED_KEYS", "").strip()
+    if settings.api_enable_auth and raw_key and not is_admin and allowed_raw:
+        allowed = {k.strip() for k in allowed_raw.split(",") if k.strip()}
+        if allowed and raw_key not in allowed:
+            raise HTTPException(status_code=403, detail="API key not allowed")
+
+    return AuthContext(key=raw_key, is_admin=is_admin)
+
+
 def get_auth_context(
     x_auth_key: Optional[str] = Header(default=None, alias="X-Auth-Key"),
     auth_key: Optional[str] = None,
 ) -> AuthContext:
     """
-    Resolve the caller's auth context from headers / query params.
+    Strict auth context resolver.
 
     When `settings.api_enable_auth` is true, a non-empty key is required
     for protected endpoints. The admin key (if configured) is treated as
@@ -52,21 +70,37 @@ def get_auth_context(
     """
 
     raw_key = x_auth_key or auth_key
-    admin_key = settings.api_admin_key
 
     if settings.api_enable_auth:
         if not raw_key:
             raise HTTPException(status_code=401, detail="Missing API auth key")
 
-    is_admin = bool(admin_key) and raw_key == admin_key
+    return _resolve_auth_context(raw_key)
 
-    allowed_raw = os.getenv("API_ALLOWED_KEYS", "").strip()
-    if settings.api_enable_auth and raw_key and not is_admin and allowed_raw:
-        allowed = {k.strip() for k in allowed_raw.split(",") if k.strip()}
-        if allowed and raw_key not in allowed:
-            raise HTTPException(status_code=403, detail="API key not allowed")
 
-    return AuthContext(key=raw_key, is_admin=is_admin)
+def get_auth_context_optional(
+    x_auth_key: Optional[str] = Header(default=None, alias="X-Auth-Key"),
+    auth_key: Optional[str] = None,
+) -> AuthContext:
+    """
+    Lenient auth context resolver.
+
+    - 当 API 鉴权关闭时（API_ENABLE_AUTH=false），可以不带 key；
+    - 当 API 鉴权开启时（API_ENABLE_AUTH=true），未提供 key 会返回 401，
+      行为与 get_auth_context 保持一致。
+
+    适用于“预览 / 历史”等接口：
+    - 普通 key：只看自己的数据；
+    - 管理员 key：看所有数据；
+    - 鉴权关闭且不带 key：视为匿名访客，由业务逻辑决定行为（当前实现为全局历史）。
+    """
+
+    raw_key = x_auth_key or auth_key
+
+    if settings.api_enable_auth and not raw_key:
+        raise HTTPException(status_code=401, detail="Missing API auth key")
+
+    return _resolve_auth_context(raw_key)
 
 
 def enforce_task_access(task_id: str, auth: AuthContext, result: AsyncResult) -> None:
@@ -132,4 +166,3 @@ def build_image_url(relative_path: str) -> str:
 
     relative_path = relative_path.lstrip("/")
     return f"/generated-images/{relative_path}"
-

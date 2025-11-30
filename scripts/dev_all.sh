@@ -23,11 +23,13 @@ echo
 
 API_LOG="${LOG_DIR}/api.dev.log"
 WEB_LOG="${LOG_DIR}/web.dev.log"
-WORKER_LOG="${LOG_DIR}/worker.dev.log"
+WORKER0_LOG="${LOG_DIR}/worker.gpu0.dev.log"
+WORKER1_LOG="${LOG_DIR}/worker.gpu1.dev.log"
 
 : > "${API_LOG}"
 : > "${WEB_LOG}"
-: > "${WORKER_LOG}"
+: > "${WORKER0_LOG}"
+: > "${WORKER1_LOG}"
 
 echo "Starting API dev server..."
 bash "${REPO_ROOT}/scripts/dev_api.sh" >> "${API_LOG}" 2>&1 &
@@ -37,15 +39,20 @@ echo "Starting Web dev server..."
 bash "${REPO_ROOT}/scripts/dev_web.sh" >> "${WEB_LOG}" 2>&1 &
 WEB_PID=$!
 
-echo "Starting Worker..."
-bash "${REPO_ROOT}/scripts/dev_worker.sh" >> "${WORKER_LOG}" 2>&1 &
-WORKER_PID=$!
+echo "Starting Worker on GPU 0..."
+GPU_ID=0 bash "${REPO_ROOT}/scripts/dev_worker.sh" >> "${WORKER0_LOG}" 2>&1 &
+WORKER0_PID=$!
+
+echo "Starting Worker on GPU 1..."
+GPU_ID=1 bash "${REPO_ROOT}/scripts/dev_worker.sh" >> "${WORKER1_LOG}" 2>&1 &
+WORKER1_PID=$!
 
 echo
 echo "All dev processes started:"
 echo "  API   : PID ${API_PID}, log ${API_LOG}"
 echo "  Web   : PID ${WEB_PID}, log ${WEB_LOG}"
-echo "  Worker: PID ${WORKER_PID}, log ${WORKER_LOG}"
+echo "  Worker (GPU 0): PID ${WORKER0_PID}, log ${WORKER0_LOG}"
+echo "  Worker (GPU 1): PID ${WORKER1_PID}, log ${WORKER1_LOG}"
 echo
 echo "To stop them, you can run:"
 echo "  bash scripts/dev_stop.sh"

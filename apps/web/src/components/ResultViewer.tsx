@@ -1,13 +1,15 @@
-import { Download, Loader2, RefreshCw, AlertCircle } from "lucide-react";
+import { Download, Loader2, AlertCircle } from "lucide-react";
 
 interface ResultViewerProps {
   status: "idle" | "pending" | "generating" | "success" | "error";
   imageUrl: string | null;
   error?: string;
   generationTime?: number;
+   width?: number;
+   height?: number;
 }
 
-export function ResultViewer({ status, imageUrl, error, generationTime }: ResultViewerProps) {
+export function ResultViewer({ status, imageUrl, error, generationTime, width, height }: ResultViewerProps) {
   if (status === "idle") {
     return (
       <div className="h-full min-h-[400px] flex flex-col items-center justify-center bg-slate-900/30 rounded-2xl border-2 border-dashed border-slate-800 text-slate-600 p-8">
@@ -61,7 +63,9 @@ export function ResultViewer({ status, imageUrl, error, generationTime }: Result
               Inference: {generationTime.toFixed(2)}s
             </p>
           )}
-          <p className="text-xs text-slate-400">1024x1024</p>
+          <p className="text-xs text-slate-400">
+            {width && height ? `${width}×${height}` : "1024×1024"}
+          </p>
         </div>
         <div className="flex space-x-2">
           <a

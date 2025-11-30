@@ -39,8 +39,13 @@ export const getTaskStatus = async (taskId: string, authKey?: string): Promise<T
   return response.json() as Promise<TaskStatusResponse>;
 };
 
-export const getImageUrl = (relativePath: string): string => {
-  return `/generated-images/${relativePath}`;
+export const getImageUrl = (relativePathOrUrl: string): string => {
+  // If backend already returned a full or relative URL, use it directly.
+  if (relativePathOrUrl.startsWith("/")) {
+    return relativePathOrUrl;
+  }
+  // Fallback to constructing from relative_path.
+  return `/generated-images/${relativePathOrUrl}`;
 };
 
 export const getHistory = async (authKey?: string, limit = 20): Promise<TaskSummary[]> => {

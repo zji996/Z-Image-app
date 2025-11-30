@@ -90,6 +90,4 @@ repo_root/
 - `scripts/dev_api.sh`：本地启动 FastAPI（基于 `uv`）。
 - `scripts/dev_worker.sh`：本地启动 Celery worker。
 - `scripts/dev_web.sh`：本地启动前端 Vite 开发服务器。
-- `scripts/download_models.py`：统一的模型下载 / 更新入口（目前为占位实现）。
-
-详细规范和对 Agent 的约束见 `docs/Agents.md`。
+- `scripts/download_models.py`：统一的模型下载 / 更新入口。

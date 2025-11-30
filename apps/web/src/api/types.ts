@@ -5,10 +5,17 @@ export interface GenerateImageRequest {
   num_inference_steps?: number;
   guidance_scale?: number;
   seed?: number | null;
+  negative_prompt?: string | null;
+  cfg_normalization?: boolean | null;
+  cfg_truncation?: number | null;
+  max_sequence_length?: number | null;
+  metadata?: Record<string, unknown>;
 }
 
 export interface GenerateImageResponse {
   task_id: string;
+  status_url: string;
+  image_url: string | null;
 }
 
 export interface TaskResult {
@@ -19,7 +26,13 @@ export interface TaskResult {
   num_inference_steps: number;
   guidance_scale: number;
   seed: number | null;
+  negative_prompt: string | null;
+  cfg_normalization: boolean | null;
+  cfg_truncation: number | null;
+  max_sequence_length: number | null;
   created_at: string;
+  auth_key: string | null;
+  metadata: Record<string, unknown>;
   output_path: string;
   relative_path: string;
 }
@@ -29,6 +42,7 @@ export interface TaskStatusResponse {
   status: "PENDING" | "STARTED" | "SUCCESS" | "FAILURE" | "RETRY" | "REVOKED";
   result?: TaskResult;
   error?: string;
+  image_url?: string | null;
 }
 
 export interface TaskSummary {
@@ -39,4 +53,5 @@ export interface TaskSummary {
   height?: number;
   width?: number;
   relative_path?: string;
+  image_url?: string | null;
 }
