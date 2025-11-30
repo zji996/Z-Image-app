@@ -1,4 +1,19 @@
-import { GenerateImageRequest, GenerateImageResponse, TaskStatusResponse, TaskSummary } from "./types";
+import {
+  CancelTaskResponse,
+  GenerateImageRequest,
+  GenerateImageResponse,
+  TaskStatusResponse,
+  TaskSummary,
+} from "./types";
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
 
 const buildHeaders = (authKey?: string): HeadersInit => {
   const headers: HeadersInit = {
@@ -48,17 +63,31 @@ export const getImageUrl = (relativePathOrUrl: string): string => {
   return `/generated-images/${relativePathOrUrl}`;
 };
 
-export const getHistory = async (authKey?: string, limit = 20): Promise<TaskSummary[]> => {
+export const getHistory = async (authKey?: string, limit = 20, offset = 0): Promise<TaskSummary[]> => {
   const params = new URLSearchParams();
   params.set("limit", String(limit));
+  params.set("offset", String(Math.max(offset, 0)));
 
   const response = await fetch(`/v1/history?${params.toString()}`, {
     headers: buildHeaders(authKey),
   });
 
   if (!response.ok) {
-    throw new Error(`Error fetching history: ${response.statusText}`);
+    throw new ApiError(`Error fetching history: ${response.statusText}`, response.status);
   }
 
   return response.json() as Promise<TaskSummary[]>;
+};
+
+export const cancelTask = async (taskId: string, authKey?: string): Promise<CancelTaskResponse> => {
+  const response = await fetch(`/v1/tasks/${taskId}/cancel`, {
+    method: "POST",
+    headers: buildHeaders(authKey),
+  });
+
+  if (!response.ok) {
+    throw new ApiError(`Error cancelling task: ${response.statusText}`, response.status);
+  }
+
+  return response.json() as Promise<CancelTaskResponse>;
 };

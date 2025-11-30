@@ -140,11 +140,13 @@ curl -X POST "http://localhost:8000/v1/images/generate" \
     "num_inference_steps": 9,
     "guidance_scale": 0.0,
     "seed": 42,
-    "negative_prompt": "low quality, blurry",
+    "negative_prompt": "",
     "metadata": {
       "client_id": "curl-demo"
     }
 ```
+
+> 提示：如果没有特别需求，可以直接省略或留空 `negative_prompt`，系统会自动使用空字符串。
 
 返回示例：
 

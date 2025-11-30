@@ -12,13 +12,45 @@ when you are ready to run inference.
 
 from __future__ import annotations
 
-import os
-from functools import lru_cache
 import json
+import os
+from collections.abc import Callable, Sequence
+from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Protocol, cast
 
 from .config import get_settings
+
+
+class TorchCudaNamespace(Protocol):
+    is_available: Callable[[], bool]
+
+
+class TorchGenerator(Protocol):
+    def manual_seed(self, seed: int) -> TorchGenerator:
+        ...
+
+
+class TorchModule(Protocol):
+    cuda: TorchCudaNamespace
+    bfloat16: object
+    float32: object
+    Generator: type[TorchGenerator]
+
+
+class PipelineResult(Protocol):
+    images: Sequence[object]
+
+
+class ZImagePipelineProtocol(Protocol):
+    transformer: object
+    text_encoder: object
+
+    def to(self, device: object) -> ZImagePipelineProtocol:
+        ...
+
+    def __call__(self, **kwargs: object) -> PipelineResult:
+        ...
 
 
 def _env_flag_enabled(name: str) -> bool:
@@ -55,7 +87,7 @@ class ZImageNotAvailable(RuntimeError):
     """Raised when required runtime dependencies for Z-Image are missing."""
 
 
-def _ensure_runtime() -> tuple[Any, Any]:
+def _ensure_runtime() -> tuple[TorchModule, type[ZImagePipelineProtocol]]:
     """
     Import torch and diffusers lazily so that the rest of the codebase
     (and tooling like linters) does not require GPU deps by default.
@@ -78,13 +110,13 @@ def _ensure_runtime() -> tuple[Any, Any]:
             "`uv add diffusers` (or pip/poetry equivalent)."
         ) from exc
 
-    return torch, ZImagePipeline
+    return cast(TorchModule, torch), cast(type[ZImagePipelineProtocol], ZImagePipeline)
 
 
 def _maybe_enable_dfloat11(
-    pipe: Any,
+    pipe: ZImagePipelineProtocol,
     *,
-    torch: Any,
+    torch: TorchModule,
     models_dir: Path,
     local_subdir: Path,
 ) -> None:
@@ -126,7 +158,7 @@ def _maybe_enable_dfloat11(
     def _configure_component(
         *,
         component_name: str,
-        module: Any,
+        module: object,
         default_suffix: str,
         env_dir_var: str,
     ) -> None:
@@ -255,10 +287,10 @@ def _maybe_enable_dfloat11(
 
 def _build_df11_only_pipeline(
     *,
-    torch: Any,
+    torch: TorchModule,
     models_dir: Path,
     local_subdir: Path,
-) -> Any:
+) -> ZImagePipelineProtocol:
     """
     Construct a Z-Image pipeline that relies only on local DFloat11-compressed
     weights, without requiring the original full-precision checkpoint on disk.
@@ -361,12 +393,15 @@ def _build_df11_only_pipeline(
     if torch.cuda.is_available():  # pragma: no cover - hardware dependent
         transformer = transformer.to(dtype=torch.bfloat16)
 
-    pipe = ZImagePipeline(
-        scheduler=scheduler,
-        vae=vae,
-        text_encoder=text_encoder,
-        tokenizer=tokenizer,
-        transformer=transformer,
+    pipe = cast(
+        ZImagePipelineProtocol,
+        ZImagePipeline(
+            scheduler=scheduler,
+            vae=vae,
+            text_encoder=text_encoder,
+            tokenizer=tokenizer,
+            transformer=transformer,
+        ),
     )
 
     # Ensure DF11 env toggles are enabled by default in this mode, but do not
@@ -397,7 +432,7 @@ def _build_df11_only_pipeline(
 
 
 @lru_cache(maxsize=1)
-def get_zimage_pipeline(device: str | None = None, model_id: str | None = None):
+def get_zimage_pipeline(device: str | None = None, model_id: str | None = None) -> ZImagePipelineProtocol:
     """
     Lazily construct and cache a Z-Image pipeline instance.
 
@@ -459,16 +494,19 @@ def get_zimage_pipeline(device: str | None = None, model_id: str | None = None):
         # 如果本地已经通过 scripts/download_models.py 拉取过对应变体，优先从本地加载
         if local_dir.exists():
             pretrained_path: str | Path = local_dir
-            extra_kwargs: dict[str, Any] = {}
+            extra_kwargs: dict[str, object] = {}
         else:
             pretrained_path = resolved_model_id
             extra_kwargs = {"cache_dir": models_dir}
 
-        pipe = ZImagePipeline.from_pretrained(
-            pretrained_path,
-            torch_dtype=dtype,
-            low_cpu_mem_usage=False,
-            **extra_kwargs,
+        pipe = cast(
+            ZImagePipelineProtocol,
+            ZImagePipeline.from_pretrained(
+                pretrained_path,
+                torch_dtype=dtype,
+                low_cpu_mem_usage=False,
+                **extra_kwargs,
+            ),
         )
 
     pipe.to(target_device)
@@ -487,7 +525,7 @@ def generate_image(
     cfg_normalization: bool | None = None,
     cfg_truncation: float | None = None,
     max_sequence_length: int | None = None,
-):
+) -> object:
     """
     Helper for running a single Z-Image generation step using the shared
     pipeline configuration.
@@ -502,7 +540,7 @@ def generate_image(
         device = getattr(pipeline, "device", None) or "cuda" if torch.cuda.is_available() else "cpu"
         generator = torch.Generator(device=device).manual_seed(seed)
 
-    call_kwargs: dict[str, Any] = {
+    call_kwargs: dict[str, object] = {
         "prompt": prompt,
         "height": height,
         "width": width,

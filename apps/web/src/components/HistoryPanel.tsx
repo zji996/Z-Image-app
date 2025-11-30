@@ -1,18 +1,28 @@
 import { TaskSummary } from "../api/types";
 import { getImageUrl } from "../api/client";
 
+type HistoryError = "unauthorized" | "unknown" | null;
+
 interface HistoryPanelProps {
   items: TaskSummary[];
   isLoading: boolean;
   onSelectImage: (imageUrl: string) => void;
-  hasAuthKey: boolean;
+  error?: HistoryError;
 }
 
-export function HistoryPanel({ items, isLoading, onSelectImage, hasAuthKey }: HistoryPanelProps) {
-  if (!hasAuthKey) {
+export function HistoryPanel({ items, isLoading, onSelectImage, error }: HistoryPanelProps) {
+  if (error === "unauthorized") {
     return (
       <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-xs text-slate-500">
-        Set an Auth Key in the header to keep a per-key history of your generations.
+        This server requires an API key to show history. Add your key in the header to continue.
+      </div>
+    );
+  }
+
+  if (error === "unknown") {
+    return (
+      <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-xs text-slate-500">
+        Unable to load history right now. Visit the History tab to try again.
       </div>
     );
   }
@@ -35,7 +45,7 @@ export function HistoryPanel({ items, isLoading, onSelectImage, hasAuthKey }: Hi
           No history yet. Generate a few images to see them here.
         </p>
       ) : (
-        <div className="grid grid-cols-3 gap-3 max-h-56 overflow-y-auto pr-1">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-56 overflow-y-auto pr-1">
           {items.map((item) => {
             if (!item.relative_path || item.status !== "SUCCESS") {
               return null;
@@ -68,4 +78,3 @@ export function HistoryPanel({ items, isLoading, onSelectImage, hasAuthKey }: Hi
     </div>
   );
 }
-

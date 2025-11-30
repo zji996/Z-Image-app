@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+import json
+from typing import Optional, cast
 
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException
 
 from libs.py_core.celery_app import celery_app
 from libs.py_core.tasks import generate_image_task
+from libs.py_core.types import GenerationResult
 
 from apps.api.schemas import (
+    CancelTaskResponse,
     GenerateImageRequest,
     GenerateImageResponse,
     TaskStatusResponse,
@@ -28,6 +31,43 @@ from apps.api.auth import (
 
 
 router = APIRouter(tags=["images"])
+
+
+def _decode_error_payload(raw: object) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Attempt to decode a structured error payload emitted by worker tasks.
+    Returns (code, hint, detail).
+    """
+
+    if raw is None:
+        return None, None, None
+
+    if isinstance(raw, str):
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return None, None, raw
+    elif isinstance(raw, bytes):
+        try:
+            decoded = raw.decode("utf-8")
+        except Exception:
+            decoded = str(raw)
+        try:
+            data = json.loads(decoded)
+        except json.JSONDecodeError:
+            return None, None, decoded
+    elif isinstance(raw, dict):
+        data = raw
+    else:
+        return None, None, str(raw)
+
+    if not isinstance(data, dict):
+        return None, None, str(raw)
+
+    code = data.get("code")
+    hint = data.get("message")
+    detail = data.get("detail") or hint
+    return code, hint, detail
 
 
 @router.post("/images/generate", response_model=GenerateImageResponse)
@@ -97,25 +137,64 @@ async def get_task_status(
     enforce_task_access(task_id, auth, result)
 
     status = result.status
-    payload: Optional[Dict[str, Any]] = None
+    payload: GenerationResult | None = None
     error: Optional[str] = None
     image_url: Optional[str] = None
+    error_code: Optional[str] = None
+    error_hint: Optional[str] = None
 
     if result.successful():
-        payload = result.result  # type: ignore[assignment]
-        if isinstance(payload, dict):
-            rel = payload.get("relative_path")
-            if isinstance(rel, str) and rel:
+        raw_payload = result.result
+        if isinstance(raw_payload, dict):
+            payload = cast(GenerationResult, raw_payload)
+            rel = payload["relative_path"]
+            if rel:
                 image_url = build_image_url(rel)
     elif result.failed():
-        error = str(result.result)
+        raw_error = result.result
+        error_code, error_hint, detail = _decode_error_payload(raw_error)
+        error = detail or str(raw_error)
 
     return TaskStatusResponse(
         task_id=task_id,
         status=status,
         result=payload,
         error=error,
+        error_code=error_code,
+        error_hint=error_hint,
         image_url=image_url,
+    )
+
+
+@router.post("/tasks/{task_id}/cancel", response_model=CancelTaskResponse)
+async def cancel_task(
+    task_id: str,
+    auth: AuthContext = Depends(get_auth_context),
+) -> CancelTaskResponse:
+    """
+    Request cancellation of a running generation task.
+    """
+
+    result = AsyncResult(task_id, app=celery_app)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    enforce_task_access(task_id, auth, result)
+
+    terminal_states = {"SUCCESS", "FAILURE", "REVOKED"}
+    status = result.status or "PENDING"
+    if status in terminal_states:
+        return CancelTaskResponse(
+            task_id=task_id,
+            status=status,
+            message="Task already completed" if status != "REVOKED" else "Task already cancelled",
+        )
+
+    celery_app.control.revoke(task_id, terminate=True, signal="SIGTERM")
+    return CancelTaskResponse(
+        task_id=task_id,
+        status="CANCELLED",
+        message="Cancellation requested",
     )
 
 
@@ -168,14 +247,15 @@ async def list_history(
         image_url: Optional[str] = None
 
         if result.successful():
-            payload = result.result
-            if isinstance(payload, dict):
-                created_at = payload.get("created_at")
-                prompt = payload.get("prompt")
-                height = payload.get("height")
-                width = payload.get("width")
-                relative_path = payload.get("relative_path")
-                if isinstance(relative_path, str) and relative_path:
+            raw_payload = result.result
+            if isinstance(raw_payload, dict):
+                payload = cast(GenerationResult, raw_payload)
+                created_at = payload["created_at"]
+                prompt = payload["prompt"]
+                height = payload["height"]
+                width = payload["width"]
+                relative_path = payload["relative_path"]
+                if relative_path:
                     image_url = build_image_url(relative_path)
 
         summaries.append(

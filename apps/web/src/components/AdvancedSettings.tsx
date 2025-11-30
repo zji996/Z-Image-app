@@ -8,6 +8,7 @@ interface AdvancedSettingsProps {
     steps: number;
     guidance: number;
     seed: number | null;
+    images: number;
   };
   onChange: (key: string, value: number | null) => void;
 }
@@ -95,8 +96,29 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
               onChange={(e) => onChange("guidance", Number(e.target.value))}
               className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500"
             />
-             <p className="text-[10px] text-slate-600">
+            <p className="text-[10px] text-slate-600">
               How closely the image follows the prompt.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex justify-between text-xs">
+              <label className="text-slate-500 font-semibold uppercase tracking-wider">Images per prompt</label>
+              <span className="text-slate-300 font-mono">
+                {settings.images ?? 1}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={4}
+              step={1}
+              value={settings.images ?? 1}
+              onChange={(e) => onChange("images", Number(e.target.value))}
+              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+            />
+            <p className="text-[10px] text-slate-600">
+              Generate multiple variations at once (1-4). Each image is enqueued as its own task.
             </p>
           </div>
 

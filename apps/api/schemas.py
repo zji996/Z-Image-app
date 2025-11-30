@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
+from libs.py_core.types import GenerationResult, JSONDict
 
 
 class GenerateImageRequest(BaseModel):
@@ -12,11 +13,11 @@ class GenerateImageRequest(BaseModel):
     num_inference_steps: int = Field(default=9, ge=1, le=50)
     guidance_scale: float = Field(default=0.0, ge=0.0, le=20.0)
     seed: Optional[int] = None
-    negative_prompt: Optional[str] = None
+    negative_prompt: Optional[str] = Field(default="")
     cfg_normalization: Optional[bool] = None
     cfg_truncation: Optional[float] = None
     max_sequence_length: Optional[int] = Field(default=None, ge=1)
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[JSONDict] = None
 
 
 class GenerateImageResponse(BaseModel):
@@ -30,8 +31,10 @@ class GenerateImageResponse(BaseModel):
 class TaskStatusResponse(BaseModel):
     task_id: str
     status: str
-    result: Optional[Dict[str, Any]] = None
+    result: Optional[GenerationResult] = None
     error: Optional[str] = None
+    error_code: Optional[str] = None
+    error_hint: Optional[str] = None
     image_url: Optional[str] = None
 
 
@@ -45,3 +48,8 @@ class TaskSummary(BaseModel):
     relative_path: Optional[str] = None
     image_url: Optional[str] = None
 
+
+class CancelTaskResponse(BaseModel):
+    task_id: str
+    status: str
+    message: Optional[str] = None

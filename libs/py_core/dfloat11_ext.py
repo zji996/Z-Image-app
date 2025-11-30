@@ -9,9 +9,6 @@ text encoders) without patching `third_party/` or the installed
 package directly.
 """
 
-from typing import Any, Dict, List
-
-
 try:  # pragma: no cover - runtime-only dependency
     import dfloat11 as _dfloat11  # type: ignore[import-not-found]
 except ImportError as exc:  # pragma: no cover - runtime-only dependency
@@ -27,10 +24,10 @@ DFloat11Model = _dfloat11.DFloat11Model  # re-export for runtime use
 
 def compress_model(
     *,
-    model: Any,
-    pattern_dict: Dict[str, List[str]],
+    model: object,
+    pattern_dict: dict[str, list[str]],
     save_path: str,
-    block_range: List[int] | None = None,
+    block_range: list[int] | None = None,
     save_single_file: bool = True,
     check_correctness: bool = True,
     threads_per_block_override: int | None = None,

@@ -42,6 +42,8 @@ export interface TaskStatusResponse {
   status: "PENDING" | "STARTED" | "SUCCESS" | "FAILURE" | "RETRY" | "REVOKED";
   result?: TaskResult;
   error?: string;
+  error_code?: string | null;
+  error_hint?: string | null;
   image_url?: string | null;
 }
 
@@ -54,4 +56,10 @@ export interface TaskSummary {
   width?: number;
   relative_path?: string;
   image_url?: string | null;
+}
+
+export interface CancelTaskResponse {
+  task_id: string;
+  status: string;
+  message?: string;
 }
