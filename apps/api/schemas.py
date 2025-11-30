@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
-from libs.py_core.types import GenerationResult, JSONDict
 
 
 class GenerateImageRequest(BaseModel):
@@ -17,7 +16,8 @@ class GenerateImageRequest(BaseModel):
     cfg_normalization: Optional[bool] = None
     cfg_truncation: Optional[float] = None
     max_sequence_length: Optional[int] = Field(default=None, ge=1)
-    metadata: Optional[JSONDict] = None
+    # 使用宽松的 dict[str, Any]，避免 Pydantic 对递归类型别名的前向引用解析问题。
+    metadata: Optional[dict[str, Any]] = None
 
 
 class GenerateImageResponse(BaseModel):
@@ -31,7 +31,8 @@ class GenerateImageResponse(BaseModel):
 class TaskStatusResponse(BaseModel):
     task_id: str
     status: str
-    result: Optional[GenerationResult] = None
+    # 使用宽松的 dict[str, Any]，避免 Pydantic 解析 libs.py_core.types 中递归 JSON 类型别名。
+    result: Optional[dict[str, Any]] = None
     error: Optional[str] = None
     error_code: Optional[str] = None
     error_hint: Optional[str] = None
@@ -50,6 +51,12 @@ class TaskSummary(BaseModel):
 
 
 class CancelTaskResponse(BaseModel):
+    task_id: str
+    status: str
+    message: Optional[str] = None
+
+
+class DeleteTaskResponse(BaseModel):
     task_id: str
     status: str
     message: Optional[str] = None

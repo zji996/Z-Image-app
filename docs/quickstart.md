@@ -173,16 +173,22 @@ curl -X GET "http://localhost:8000/v1/tasks/b0e4aaf0bfa7421b9cb94c624c7fd139" \
 {
   "task_id": "...",
   "status": "SUCCESS",
-  "result": { ... },
+  "result": {
+    "relative_path": "20250101/120000_b0e4....png",
+    "preview_relative_path": "20250101/120000_b0e4....webp",
+    "output_path": ".../outputs/z-image-outputs/20250101/120000_b0e4....png",
+    "preview_output_path": ".../outputs/z-image-outputs/20250101/120000_b0e4....webp",
+    "..."
+  },
   "error": null,
-  "image_url": "/generated-images/20250101/120000_b0e4....png"
+  "image_url": "/generated-images/20250101/120000_b0e4....webp"
 }
 ```
 
-说明图片已生成成功，可以使用 `image_url` 访问图片：
+说明图片已生成成功，可以使用 `image_url` 访问**预览图**（WebP）：
 
 ```text
-http://localhost:8000/generated-images/20250101/120000_b0e4....png
+http://localhost:8000/generated-images/20250101/120000_b0e4....webp
 ```
 
 ---
@@ -208,7 +214,7 @@ curl -X GET "http://localhost:8000/v1/history?limit=20&offset=0" \
     "height": 1024,
     "width": 1024,
     "relative_path": "20250101/120000_b0e4....png",
-    "image_url": "/generated-images/20250101/120000_b0e4....png"
+    "image_url": "/generated-images/20250101/120000_b0e4....webp"
   }
 ]
 ```
@@ -219,4 +225,5 @@ curl -X GET "http://localhost:8000/v1/history?limit=20&offset=0" \
 - 使用管理员 Key（`API_ADMIN_KEY`）：返回所有调用方的最近任务；
 - 关闭鉴权时（`API_ENABLE_AUTH=false` 且不带 Key）：返回全局最近任务，仅用于本地预览。
 
-前端可以直接用 `image_url` 渲染缩略图或原图。
+前端可以直接用 `image_url` 渲染 WebP 缩略图或原图；如需下载无损 PNG，可将 `.webp`
+后缀替换为 `.png`，或使用 `result.relative_path` 手动构造下载地址。

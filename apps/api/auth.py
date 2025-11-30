@@ -21,6 +21,7 @@ TASK_OWNER_TTL_SECONDS = 7 * 24 * 60 * 60  # 7 days
 USER_TASKS_KEY_PREFIX = "zimage:user_tasks:"
 ALL_TASKS_KEY = "zimage:all_tasks"
 USER_TASKS_MAX_ITEMS = 100
+DELETED_TASKS_KEY = "zimage:deleted_tasks"
 
 
 class AuthContext(BaseModel):
@@ -140,20 +141,26 @@ def enforce_task_access(task_id: str, auth: AuthContext, result: AsyncResult) ->
                 raise HTTPException(status_code=403, detail="Not allowed to access this task")
 
 
-def register_task(task_id: str, auth_key: str) -> None:
+def register_task(task_id: str, auth_key: Optional[str] = None) -> None:
     """
     Record task ownership and simple per-key / global history in Redis.
+
+    - When `auth_key` is provided, we track both per-user history and a
+      best-effort owner mapping for access control.
+    - Regardless of `auth_key`, we always append to the global history
+      list so that anonymous / preview usage can still see recent tasks.
     """
 
-    redis_client.setex(
-        name=f"{TASK_OWNER_KEY_PREFIX}{task_id}",
-        time=TASK_OWNER_TTL_SECONDS,
-        value=auth_key,
-    )
+    if auth_key:
+        redis_client.setex(
+            name=f"{TASK_OWNER_KEY_PREFIX}{task_id}",
+            time=TASK_OWNER_TTL_SECONDS,
+            value=auth_key,
+        )
 
-    user_list_key = f"{USER_TASKS_KEY_PREFIX}{auth_key}"
-    redis_client.lpush(user_list_key, task_id)
-    redis_client.ltrim(user_list_key, 0, USER_TASKS_MAX_ITEMS - 1)
+        user_list_key = f"{USER_TASKS_KEY_PREFIX}{auth_key}"
+        redis_client.lpush(user_list_key, task_id)
+        redis_client.ltrim(user_list_key, 0, USER_TASKS_MAX_ITEMS - 1)
 
     redis_client.lpush(ALL_TASKS_KEY, task_id)
     redis_client.ltrim(ALL_TASKS_KEY, 0, USER_TASKS_MAX_ITEMS - 1)

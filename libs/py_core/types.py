@@ -29,8 +29,12 @@ class GenerationResult(TypedDict):
     created_at: str
     auth_key: str | None
     metadata: JSONDict
+    # PNG paths (download / archival).
     output_path: str
     relative_path: str
+    # WebP paths (lightweight previews).
+    preview_output_path: str
+    preview_relative_path: str
 
 
 __all__ = [

@@ -12,6 +12,7 @@ from libs.py_core.types import GenerationResult
 
 from apps.api.schemas import (
     CancelTaskResponse,
+    DeleteTaskResponse,
     GenerateImageRequest,
     GenerateImageResponse,
     TaskStatusResponse,
@@ -21,6 +22,7 @@ from apps.api.auth import (
     ALL_TASKS_KEY,
     USER_TASKS_KEY_PREFIX,
     AuthContext,
+    DELETED_TASKS_KEY,
     build_image_url,
     enforce_task_access,
     get_auth_context,
@@ -107,10 +109,12 @@ async def enqueue_image_generation(
 
     # Store a lightweight owner mapping for quick access control checks
     # while the task is pending, and update per-key / global history.
-    if auth_key_for_task:
-        from apps.api.auth import register_task  # local import to avoid cycles
+    # When auth is disabled and no key is provided, we still record the
+    # task in the global history list so that anonymous usage can see
+    # recent generations.
+    from apps.api.auth import register_task  # local import to avoid cycles
 
-        register_task(task.id, auth_key_for_task)
+    register_task(task.id, auth_key_for_task)
 
     status_url = f"/v1/tasks/{task.id}"
 
@@ -147,9 +151,12 @@ async def get_task_status(
         raw_payload = result.result
         if isinstance(raw_payload, dict):
             payload = cast(GenerationResult, raw_payload)
-            rel = payload["relative_path"]
+            # Prefer the lightweight WebP preview path when available,
+            # but fall back to the original PNG-relative path for older
+            # payloads that do not include preview_relative_path.
+            rel = payload.get("preview_relative_path") or payload.get("relative_path")
             if rel:
-                image_url = build_image_url(rel)
+                image_url = build_image_url(str(rel))
     elif result.failed():
         raw_error = result.result
         error_code, error_hint, detail = _decode_error_payload(raw_error)
@@ -198,6 +205,35 @@ async def cancel_task(
     )
 
 
+@router.delete("/history/{task_id}", response_model=DeleteTaskResponse)
+async def soft_delete_history_item(
+    task_id: str,
+    auth: AuthContext = Depends(get_auth_context),
+) -> DeleteTaskResponse:
+    """
+    Soft delete a history item by task_id.
+
+    This does not remove any underlying files or Celery results; it only
+    marks the task as deleted in Redis so that subsequent history queries
+    stop returning it. When API auth is enabled, only the task owner or
+    an admin key may delete a given task.
+    """
+
+    result = AsyncResult(task_id, app=celery_app)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    enforce_task_access(task_id, auth, result)
+
+    redis_client.sadd(DELETED_TASKS_KEY, task_id)
+
+    return DeleteTaskResponse(
+        task_id=task_id,
+        status="deleted",
+        message="Task hidden from history",
+    )
+
+
 @router.get("/history", response_model=list[TaskSummary])
 async def list_history(
     limit: int = 20,
@@ -233,6 +269,11 @@ async def list_history(
     summaries: list[TaskSummary] = []
     for raw in task_ids_bytes:
         task_id = raw.decode("utf-8")
+
+        # Skip tasks that have been soft-deleted from history.
+        if redis_client.sismember(DELETED_TASKS_KEY, task_id):
+            continue
+
         result = AsyncResult(task_id, app=celery_app)
         # Skip tasks that no longer exist in the backend.
         if result is None:
@@ -243,6 +284,9 @@ async def list_history(
         prompt: Optional[str] = None
         height: Optional[int] = None
         width: Optional[int] = None
+        # We keep relative_path pointing at the original PNG path so that
+        # callers can still download lossless images, while image_url is
+        # used for the (potentially WebP) preview.
         relative_path: Optional[str] = None
         image_url: Optional[str] = None
 
@@ -254,9 +298,12 @@ async def list_history(
                 prompt = payload["prompt"]
                 height = payload["height"]
                 width = payload["width"]
-                relative_path = payload["relative_path"]
-                if relative_path:
-                    image_url = build_image_url(relative_path)
+                # PNG relative path (for downloads).
+                relative_path = str(payload.get("relative_path") or "")
+                # Prefer WebP preview path when available.
+                preview_rel = payload.get("preview_relative_path") or relative_path
+                if preview_rel:
+                    image_url = build_image_url(str(preview_rel))
 
         summaries.append(
             TaskSummary(

@@ -6,7 +6,7 @@ import { ResultViewer } from "./components/ResultViewer";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { HistoryPage } from "./pages/HistoryPage";
 import { BatchPreview, type BatchPreviewItem } from "./components/BatchPreview";
-import { ApiError, cancelTask, generateImage, getTaskStatus, getHistory, getImageUrl } from "./api/client";
+import { ApiError, cancelTask, deleteHistoryItem, generateImage, getTaskStatus, getHistory, getImageUrl } from "./api/client";
 import type { TaskSummary } from "./api/types";
 
 const AUTH_STORAGE_KEY = "zimage_auth_key";
@@ -385,6 +385,20 @@ function App() {
     };
   }, []);
 
+  const handleDeleteHistoryItem = useCallback(
+    async (taskId: string) => {
+      try {
+        await deleteHistoryItem(taskId, authKey || undefined);
+        // Refresh history from backend so that both the History page
+        // and the Recent panel stay in sync.
+        refreshHistory(true);
+      } catch (err) {
+        console.error("Failed to delete history item", err);
+      }
+    },
+    [authKey, refreshHistory],
+  );
+
   const handleCancelBatch = useCallback(async () => {
     if (!currentBatchMeta) {
       return;
@@ -532,8 +546,10 @@ function App() {
                   setLastSize(size);
                 }
                 setStatus("success");
-                setActiveView("studio");
+                // Keep the user on the History view; they can
+                // explicitly switch back to Studio if needed.
               }}
+              onDeleteItem={handleDeleteHistoryItem}
             />
           )}
         </div>

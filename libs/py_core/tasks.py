@@ -93,11 +93,27 @@ def generate_image_task(
     dated_dir = output_root / now.strftime("%Y%m%d")
     dated_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = f"{now.strftime('%H%M%S')}_{image_id}.png"
-    output_path = dated_dir / filename
-    image.save(output_path)
+    timestamp = now.strftime("%H%M%S")
+    png_filename = f"{timestamp}_{image_id}.png"
+    png_output_path = dated_dir / png_filename
+    image.save(png_output_path)
 
-    relative_path = output_path.relative_to(output_root)
+    png_relative_path = png_output_path.relative_to(output_root)
+
+    # In addition to the PNG used for downloads, also save a WebP version
+    # for UI previews to reduce bandwidth usage.
+    webp_filename = f"{timestamp}_{image_id}.webp"
+    webp_output_path = dated_dir / webp_filename
+    try:
+        # Pillow infers the WEBP format from the suffix; we keep defaults
+        # for quality to avoid surprising file sizes.
+        image.save(webp_output_path)
+        preview_relative_path = webp_output_path.relative_to(output_root)
+    except Exception:  # pragma: no cover - runtime only
+        # If WebP save fails for any reason, fall back to the PNG path so
+        # callers still have a valid preview URL.
+        webp_output_path = png_output_path
+        preview_relative_path = png_relative_path
 
     return {
         "image_id": image_id,
@@ -114,6 +130,10 @@ def generate_image_task(
         "created_at": now.isoformat(),
         "auth_key": auth_key,
         "metadata": metadata if metadata is not None else {},
-        "output_path": str(output_path),
-        "relative_path": str(relative_path),
+        # PNG paths (for downloads / archival).
+        "output_path": str(png_output_path),
+        "relative_path": str(png_relative_path),
+        # WebP paths (for previews).
+        "preview_output_path": str(webp_output_path),
+        "preview_relative_path": str(preview_relative_path),
     }

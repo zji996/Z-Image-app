@@ -5,8 +5,8 @@ interface ResultViewerProps {
   imageUrl: string | null;
   error?: string;
   generationTime?: number;
-   width?: number;
-   height?: number;
+  width?: number;
+  height?: number;
 }
 
 export function ResultViewer({ status, imageUrl, error, generationTime, width, height }: ResultViewerProps) {
@@ -68,16 +68,35 @@ export function ResultViewer({ status, imageUrl, error, generationTime, width, h
           </p>
         </div>
         <div className="flex space-x-2">
-          <a
-            href={imageUrl || "#"}
-            download={`z-image-${Date.now()}.png`}
-            target="_blank"
-            rel="noreferrer"
-            className="p-3 rounded-xl bg-slate-800 text-white hover:bg-cyan-600 hover:text-white transition-colors shadow-lg"
-            title="Download Image"
-          >
-            <Download size={20} />
-          </a>
+          {/**
+           * Use PNG for downloads. When previews are served as WebP,
+           * derive the PNG URL by swapping the extension while keeping
+           * any query string intact.
+           */}
+          {(() => {
+            const href = (() => {
+              if (!imageUrl) return "#";
+              const [base, query] = imageUrl.split("?");
+              if (base.toLowerCase().endsWith(".webp")) {
+                const pngBase = `${base.slice(0, -5)}.png`;
+                return query ? `${pngBase}?${query}` : pngBase;
+              }
+              return imageUrl;
+            })();
+
+            return (
+              <a
+                href={href}
+                download={`z-image-${Date.now()}.png`}
+                target="_blank"
+                rel="noreferrer"
+                className="p-3 rounded-xl bg-slate-800 text-white hover:bg-cyan-600 hover:text-white transition-colors shadow-lg"
+                title="Download Image"
+              >
+                <Download size={20} />
+              </a>
+            );
+          })()}
         </div>
       </div>
     </div>

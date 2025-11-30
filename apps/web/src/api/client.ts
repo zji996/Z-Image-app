@@ -91,3 +91,14 @@ export const cancelTask = async (taskId: string, authKey?: string): Promise<Canc
 
   return response.json() as Promise<CancelTaskResponse>;
 };
+
+export const deleteHistoryItem = async (taskId: string, authKey?: string): Promise<void> => {
+  const response = await fetch(`/v1/history/${taskId}`, {
+    method: "DELETE",
+    headers: buildHeaders(authKey),
+  });
+
+  if (!response.ok) {
+    throw new ApiError(`Error deleting history item: ${response.statusText}`, response.status);
+  }
+};

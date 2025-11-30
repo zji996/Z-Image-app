@@ -51,7 +51,7 @@ export function HistoryPanel({ items, isLoading, onSelectImage, error }: History
               return null;
             }
 
-            const imageUrl = getImageUrl(item.relative_path);
+            const imageUrl = getImageUrl(item.image_url || item.relative_path);
 
             return (
               <button
