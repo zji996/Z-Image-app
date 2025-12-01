@@ -1,4 +1,4 @@
-import { AlertTriangle, Loader2, StopCircle } from "lucide-react";
+import { AlertTriangle, Loader2, StopCircle, Image as ImageIcon } from "lucide-react";
 
 export type BatchPreviewStatus = "pending" | "running" | "success" | "error" | "cancelled";
 
@@ -23,11 +23,11 @@ interface BatchPreviewProps {
 }
 
 const STATUS_LABEL: Record<BatchPreviewStatus, string> = {
-  pending: "等待中",
-  running: "生成中",
-  success: "完成",
-  error: "失败",
-  cancelled: "已取消",
+  pending: "Pending",
+  running: "Running",
+  success: "Done",
+  error: "Failed",
+  cancelled: "Cancelled",
 };
 
 export function BatchPreview({
@@ -38,7 +38,9 @@ export function BatchPreview({
   onCancel,
   isCancelling,
 }: BatchPreviewProps) {
-  if (!batchId || total <= 0) {
+  if (!batchId || total <= 1) {
+    // Only show batch preview for 2 or more items.
+    // Single generation is handled by the main ResultViewer.
     return null;
   }
 
@@ -48,21 +50,16 @@ export function BatchPreview({
   const sortedItems = [...itemMap.values()].sort((a, b) => a.index - b.index);
   const completed = sortedItems.filter((item) => item.status === "success").length;
   const active = sortedItems.filter((item) => item.status === "pending" || item.status === "running").length;
-  const showPanel = total > 1 || completed < total || active > 0;
-
-  if (!showPanel) {
-    return null;
-  }
-
+  
   const canCancel = Boolean(onCancel) && active > 0;
 
   return (
-    <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-4">
+    <div className="mt-8 rounded-3xl border border-stone-200 bg-white shadow-sm p-6 space-y-4 animate-slide-up">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-slate-100">当前批次</p>
-          <p className="text-xs text-slate-500">
-            {completed}/{total} 已完成
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-stone-700">Batch Progress</p>
+          <p className="text-xs text-stone-400 font-medium">
+            {completed} of {total} completed
           </p>
         </div>
         {canCancel && (
@@ -70,18 +67,17 @@ export function BatchPreview({
             type="button"
             onClick={onCancel}
             disabled={isCancelling}
-            className="text-xs px-3 py-1.5 rounded-md border border-rose-500/60 text-rose-100 bg-rose-500/10 hover:bg-rose-500/20 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            className="text-xs px-4 py-2 rounded-full border border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
-            {isCancelling ? "取消中..." : "取消未完成"}
+            {isCancelling ? "Cancelling..." : "Stop Remaining"}
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         {Array.from({ length: total }).map((_, index) => {
           const item = itemMap.get(index);
           const status: BatchPreviewStatus = item?.status ?? "pending";
-          const clickable = status === "success" && item?.imageUrl;
           const label = STATUS_LABEL[status];
 
           if (status === "success" && item?.imageUrl) {
@@ -90,11 +86,16 @@ export function BatchPreview({
                 key={`${batchId}-${index}`}
                 type="button"
                 onClick={() => onSelectImage(item.imageUrl!, item.width && item.height ? { width: item.width, height: item.height } : undefined)}
-                className="group relative rounded-xl overflow-hidden border border-slate-800 hover:border-cyan-500/70 transition"
+                className="group relative rounded-2xl overflow-hidden border border-stone-200 hover:border-orange-300 hover:shadow-md transition-all aspect-square"
               >
-                <img src={item.imageUrl} alt={`Batch image ${index + 1}`} className="w-full h-24 object-cover" />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1">
-                  <p className="text-[10px] text-slate-100">{label}</p>
+                <div className="absolute inset-0 bg-stone-100" />
+                <img 
+                  src={item.imageUrl} 
+                  alt={`Batch image ${index + 1}`} 
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <p className="text-[10px] font-medium text-white">{label}</p>
                 </div>
               </button>
             );
@@ -103,47 +104,47 @@ export function BatchPreview({
           let stateContent: JSX.Element;
           if (status === "error") {
             stateContent = (
-              <div className="flex flex-col items-center justify-center text-center px-3 py-4 h-24">
-                <AlertTriangle className="h-4 w-4 text-amber-300 mb-1" />
-                <p className="text-[11px] text-amber-100">{item?.errorHint || label}</p>
+              <div className="flex flex-col items-center justify-center text-center p-2 h-full">
+                <AlertTriangle className="h-5 w-5 text-amber-500 mb-2" />
+                <p className="text-[10px] font-medium text-amber-700 leading-tight">{item?.errorHint || label}</p>
               </div>
             );
           } else if (status === "cancelled") {
             stateContent = (
-              <div className="flex flex-col items-center justify-center text-center px-3 py-4 h-24">
-                <StopCircle className="h-4 w-4 text-slate-400 mb-1" />
-                <p className="text-[11px] text-slate-300">已取消</p>
+              <div className="flex flex-col items-center justify-center text-center p-2 h-full">
+                <StopCircle className="h-5 w-5 text-stone-400 mb-2" />
+                <p className="text-[10px] font-medium text-stone-500">Cancelled</p>
               </div>
             );
           } else if (status === "running") {
             stateContent = (
-              <div className="flex flex-col items-center justify-center text-center px-3 py-4 h-24">
-                <Loader2 className="h-5 w-5 text-cyan-400 animate-spin mb-1" />
-                <p className="text-[11px] text-cyan-100">{label}</p>
+              <div className="flex flex-col items-center justify-center text-center p-2 h-full">
+                <Loader2 className="h-6 w-6 text-orange-500 animate-spin mb-2" />
+                <p className="text-[10px] font-medium text-orange-600 animate-pulse">{label}</p>
               </div>
             );
           } else {
             stateContent = (
-              <div className="flex flex-col items-center justify-center text-center px-3 py-4 h-24 text-slate-400">
-                <Loader2 className="h-5 w-5 animate-spin mb-1" />
-                <p className="text-[11px]">{label}</p>
+              <div className="flex flex-col items-center justify-center text-center p-2 h-full text-stone-300">
+                <ImageIcon className="h-6 w-6 mb-2 opacity-50" />
+                <p className="text-[10px] font-medium">Queued</p>
               </div>
             );
           }
 
           const borderClass =
             status === "error"
-              ? "border-amber-500/50 bg-amber-500/5"
+              ? "border-amber-200 bg-amber-50"
               : status === "cancelled"
-              ? "border-slate-700 bg-slate-900/60"
+              ? "border-stone-200 bg-stone-50"
               : status === "running"
-              ? "border-cyan-500/40 bg-cyan-500/10"
-              : "border-slate-800 bg-slate-900/50";
+              ? "border-orange-200 bg-orange-50"
+              : "border-stone-100 bg-stone-50/50";
 
           return (
             <div
               key={`${batchId}-${index}`}
-              className={`rounded-xl border ${borderClass} flex items-center justify-center`}
+              className={`rounded-2xl border ${borderClass} aspect-square flex items-center justify-center transition-all`}
             >
               {stateContent}
             </div>

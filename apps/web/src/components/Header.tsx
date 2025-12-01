@@ -9,24 +9,24 @@ interface HeaderProps {
 
 export function Header({ authKey, onAuthKeyChange, activeView, onChangeView }: HeaderProps) {
   return (
-    <header className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/50 backdrop-blur-sm sticky top-0 z-10">
+    <header className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-stone-50/80 backdrop-blur-md sticky top-0 z-10 transition-colors duration-300">
       <div className="flex items-center space-x-6">
         <div className="flex items-center space-x-3">
-          <div className="size-8 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-white font-bold shadow-lg shadow-cyan-500/20">
+          <div className="size-8 rounded-lg bg-gradient-to-br from-stone-800 to-stone-600 flex items-center justify-center text-white font-bold shadow-lg shadow-stone-200">
             Z
           </div>
-          <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-100 to-slate-400">
-            Z-Image-app
+          <h1 className="text-xl font-bold text-stone-800 tracking-tight">
+            Z-Image
           </h1>
         </div>
         <nav className="hidden md:flex items-center space-x-2 text-xs">
           <button
             type="button"
             onClick={() => onChangeView("studio")}
-            className={`px-3 py-1.5 rounded-full border ${
+            className={`px-4 py-1.5 rounded-full font-medium transition-all duration-200 ${
               activeView === "studio"
-                ? "border-cyan-500 bg-cyan-500/10 text-cyan-100"
-                : "border-slate-700 bg-slate-900 text-slate-400 hover:border-cyan-500/60 hover:text-cyan-100"
+                ? "bg-white text-stone-800 shadow-sm ring-1 ring-stone-200"
+                : "text-stone-500 hover:text-stone-800 hover:bg-stone-100"
             }`}
           >
             Studio
@@ -34,10 +34,10 @@ export function Header({ authKey, onAuthKeyChange, activeView, onChangeView }: H
           <button
             type="button"
             onClick={() => onChangeView("history")}
-            className={`px-3 py-1.5 rounded-full border ${
+            className={`px-4 py-1.5 rounded-full font-medium transition-all duration-200 ${
               activeView === "history"
-                ? "border-cyan-500 bg-cyan-500/10 text-cyan-100"
-                : "border-slate-700 bg-slate-900 text-slate-400 hover:border-cyan-500/60 hover:text-cyan-100"
+                ? "bg-white text-stone-800 shadow-sm ring-1 ring-stone-200"
+                : "text-stone-500 hover:text-stone-800 hover:bg-stone-100"
             }`}
           >
             History
@@ -47,11 +47,11 @@ export function Header({ authKey, onAuthKeyChange, activeView, onChangeView }: H
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-2">
           <span
-            className={`inline-flex h-2 w-2 rounded-full ${
-              authKey ? "bg-emerald-400" : "bg-slate-500"
+            className={`inline-flex h-2 w-2 rounded-full transition-colors duration-300 ${
+              authKey ? "bg-emerald-400" : "bg-stone-300"
             }`}
           />
-          <span className="text-[11px] text-slate-400 uppercase tracking-wide">
+          <span className="text-[11px] text-stone-400 uppercase tracking-wide font-medium">
             {authKey ? "Authenticated" : "Guest"}
           </span>
         </div>
@@ -59,11 +59,11 @@ export function Header({ authKey, onAuthKeyChange, activeView, onChangeView }: H
           type="password"
           value={authKey}
           onChange={(e) => onAuthKeyChange(e.target.value)}
-          placeholder="Auth Key (optional)"
-          className="text-xs px-3 py-1.5 rounded-md bg-slate-900 border border-slate-700 text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-cyan-500/60 focus:border-cyan-500/60 font-mono"
+          placeholder="Auth Key"
+          className="text-xs px-3 py-1.5 rounded-lg bg-white border border-stone-200 text-stone-600 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500/50 font-mono transition-all shadow-sm w-32 focus:w-48"
         />
-        <div className="text-xs text-slate-500 font-mono">
-          v0.1.0-beta
+        <div className="text-xs text-stone-400 font-mono hidden sm:block">
+          v0.1.0
         </div>
       </div>
     </header>

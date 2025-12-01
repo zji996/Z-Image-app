@@ -20,29 +20,29 @@ export function PromptInput({ prompt, setPrompt, onGenerate, isGenerating }: Pro
 
   return (
     <div className="space-y-3">
-      <div className="relative">
+      <div className="relative group">
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Describe the image you want to imagine..."
+          placeholder="Imagine something wonderful..."
           disabled={isGenerating}
-          className="w-full min-h-[120px] p-4 pr-32 bg-slate-900/50 border border-slate-800 rounded-2xl text-lg text-slate-100 placeholder-slate-600 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 outline-none resize-none transition-all shadow-inner"
+          className="w-full min-h-[140px] p-5 pr-32 bg-white border border-stone-200 rounded-3xl text-lg text-stone-800 placeholder-stone-400 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-300 outline-none resize-none transition-all duration-300 shadow-sm group-hover:shadow-md"
         />
         <div className="absolute bottom-3 right-3">
           <button
             onClick={onGenerate}
             disabled={!prompt.trim() || isGenerating}
-            className={`flex items-center space-x-2 px-6 py-2.5 rounded-xl font-semibold transition-all duration-200 ${
+            className={`flex items-center space-x-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-300 ${
               !prompt.trim() || isGenerating
-                ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-                : "bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:shadow-lg hover:shadow-cyan-500/25 hover:-translate-y-0.5 active:translate-y-0"
+                ? "bg-stone-100 text-stone-400 cursor-not-allowed"
+                : "bg-stone-900 text-white hover:bg-orange-600 hover:shadow-lg hover:shadow-orange-200 hover:-translate-y-0.5 active:scale-95"
             }`}
           >
             {isGenerating ? (
               <>
                 <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Thinking...</span>
+                <span>Creating...</span>
               </>
             ) : (
               <>
@@ -53,11 +53,11 @@ export function PromptInput({ prompt, setPrompt, onGenerate, isGenerating }: Pro
           </button>
         </div>
       </div>
-      <div className="flex justify-between items-center px-1">
-        <p className="text-xs text-slate-500">
-          Press <kbd className="font-sans bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 border border-slate-700">Enter</kbd> to generate
+      <div className="flex justify-between items-center px-2">
+        <p className="text-xs text-stone-400">
+          Press <kbd className="font-sans bg-white px-1.5 py-0.5 rounded text-stone-500 border border-stone-200 shadow-sm text-[10px] font-medium">Enter</kbd> to generate
         </p>
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-stone-400 font-medium">
            {prompt.length} chars
         </p>
       </div>

@@ -1,7 +1,6 @@
 import { TaskSummary } from "../api/types";
 import { getImageUrl } from "../api/client";
-
-type HistoryError = "unauthorized" | "unknown" | null;
+import type { HistoryError } from "../types/history";
 
 interface HistoryPanelProps {
   items: TaskSummary[];
@@ -13,7 +12,7 @@ interface HistoryPanelProps {
 export function HistoryPanel({ items, isLoading, onSelectImage, error }: HistoryPanelProps) {
   if (error === "unauthorized") {
     return (
-      <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-xs text-slate-500">
+      <div className="mt-6 rounded-xl border border-stone-200 bg-stone-50 p-4 text-xs text-stone-500">
         This server requires an API key to show history. Add your key in the header to continue.
       </div>
     );
@@ -21,55 +20,68 @@ export function HistoryPanel({ items, isLoading, onSelectImage, error }: History
 
   if (error === "unknown") {
     return (
-      <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-xs text-slate-500">
+      <div className="mt-6 rounded-xl border border-stone-200 bg-stone-50 p-4 text-xs text-stone-500">
         Unable to load history right now. Visit the History tab to try again.
       </div>
     );
   }
 
+  // Limit items to 6 for cleaner look in sidebar
+  const displayItems = items.slice(0, 6);
+
   return (
-    <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+    <div className="mt-8 animate-slide-up">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-medium text-stone-800 tracking-tight">
           Recent Generations
         </h2>
         {isLoading && (
-          <span className="text-[10px] text-slate-500 animate-pulse">
+          <span className="text-[10px] text-stone-400 animate-pulse">
             Loading...
           </span>
         )}
       </div>
 
       {items.length === 0 && !isLoading ? (
-        <p className="text-xs text-slate-600">
-          No history yet. Generate a few images to see them here.
-        </p>
+        <div className="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-6 text-center">
+          <p className="text-xs text-stone-500">
+            No history yet.
+          </p>
+        </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-56 overflow-y-auto pr-1">
-          {items.map((item) => {
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {displayItems.map((item, index) => {
             if (!item.relative_path || item.status !== "SUCCESS") {
               return null;
             }
 
             const imageUrl = getImageUrl(item.image_url || item.relative_path);
-
+            
+            // Calculate aspect ratio class if possible, but since we want a clean grid,
+            // we'll stick to a fixed aspect ratio for the container but use object-cover
+            // carefully, or let it fit.
+            // For "清新" look, let's use a square container with object-cover (clean grid)
+            // BUT add a button to see full image.
+            // User complaint: "预览图比例和请求生成比例不符".
+            // If we want to respect aspect ratio in a grid, we can't use a simple grid.
+            // A compromise: use object-contain within a square bg-stone-100 box.
+            
             return (
               <button
                 key={item.task_id}
                 type="button"
                 onClick={() => onSelectImage(imageUrl)}
-                className="group relative rounded-lg overflow-hidden border border-slate-800 hover:border-cyan-500/60 hover:shadow-[0_0_12px_rgba(6,182,212,0.35)] transition-all duration-150 bg-slate-900"
+                className="group relative rounded-2xl overflow-hidden border border-stone-200 hover:border-orange-300 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-300 bg-stone-50 aspect-square flex items-center justify-center"
+                style={{ animationDelay: `${index * 50}ms` }}
               >
+                 <div className="absolute inset-0 bg-stone-100" />
                 <img
                   src={imageUrl}
                   alt={item.prompt || "Generated image"}
-                  className="w-full h-20 object-cover"
+                  className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300"
                 />
-                <div className="absolute inset-x-0 bottom-0 px-2 py-1 bg-gradient-to-t from-black/70 to-transparent">
-                  <p className="truncate text-[10px] text-slate-200">
-                    {item.prompt || "Untitled"}
-                  </p>
-                </div>
+                {/* Overlay for "View" */}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
               </button>
             );
           })}

@@ -26,11 +26,21 @@ class Settings(BaseSettings):
     models_dir: Path = Path(os.getenv("MODELS_DIR", DEFAULT_MODELS_DIR))
     outputs_dir: Path = Path(os.getenv("Z_IMAGE_OUTPUT_DIR", DEFAULT_OUTPUTS_DIR))
 
+    # Celery worker settings (used by apps/worker).
+    # Controls the number of concurrent worker processes for a single Celery
+    # worker instance. Exposed as the WORKER_CONCURRENCY environment variable.
+    # NOTE: For Z-Image DF11 inference on a single GPU, the recommended default
+    # is 1 to reduce VRAM pressure. Increase with care.
+    worker_concurrency: int = 1
+
     # Simple API key auth for the HTTP layer (used by apps/api).
-    # When `api_enable_auth` is true, requests must provide an auth key,
-    # and an optional admin key can bypass per-user restrictions.
-    api_enable_auth: bool = False
-    api_admin_key: str | None = None
+    # We default to enabling auth to keep semantics simple: every request
+    # must provide a key, and an admin key can bypass per-user restrictions.
+    # - API_ENABLE_AUTH can still be overridden via environment variables.
+    # - If API_ADMIN_KEY is not set, we fall back to a default "admin" key
+    #   so that local development works out of the box.
+    api_enable_auth: bool = True
+    api_admin_key: str | None = "admin"
 
 
 @lru_cache(maxsize=1)
