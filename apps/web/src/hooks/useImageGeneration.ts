@@ -28,6 +28,7 @@ interface UseImageGenerationResult {
   prompt: string;
   setPrompt: (value: string) => void;
   settings: GenerationSettings;
+  updateSettings: (updates: Partial<GenerationSettings>) => void;
   handleSettingsChange: (key: keyof GenerationSettings, value: number | null) => void;
   status: GenerationStatus;
   imageUrl: string | null;
@@ -123,8 +124,12 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
     [],
   );
 
+  const updateSettings = useCallback((updates: Partial<GenerationSettings>) => {
+    setSettings((prev) => ({ ...prev, ...updates }));
+  }, []);
+
   const handleSettingsChange = (key: keyof GenerationSettings, value: number | null) => {
-    setSettings((prev) => ({ ...prev, [key]: value }));
+    updateSettings({ [key]: value });
   };
 
   const handleGenerate = useCallback(async () => {
@@ -339,6 +344,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
     prompt,
     setPrompt,
     settings,
+    updateSettings,
     handleSettingsChange,
     status,
     imageUrl,

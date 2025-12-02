@@ -30,6 +30,7 @@ function App() {
     setPrompt,
     settings,
     handleSettingsChange,
+    updateSettings,
     status,
     imageUrl,
     error,
@@ -125,7 +126,7 @@ function App() {
                     isGenerating={isSubmitting}
                   />
 
-                  <AdvancedSettings settings={settings} onChange={handleSettingsChange} />
+                  <AdvancedSettings settings={settings} onChange={updateSettings} />
 
                   <div className="pt-4 text-xs text-stone-500 leading-relaxed border-t border-stone-200">
                     <p className="mb-2 font-semibold text-stone-400 uppercase tracking-wider">Tips</p>
@@ -157,11 +158,7 @@ function App() {
                       total={currentBatchMeta?.size ?? 0}
                       items={currentBatchItems}
                       onSelectImage={(url, size) => {
-                        setImageUrl(url);
-                        if (size) {
-                          setLastSize(size);
-                        }
-                        setStatus("success");
+                        selectImage(url, size);
                       }}
                       onCancel={handleCancelBatch}
                       isCancelling={isCancellingBatch}
