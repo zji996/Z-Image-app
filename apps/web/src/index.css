@@ -1,1 +1,113 @@
 @import "tailwindcss";
+
+/* ===== Animation Utilities ===== */
+
+/* Staggered animation delay utility classes */
+.stagger-1 { animation-delay: 50ms; }
+.stagger-2 { animation-delay: 100ms; }
+.stagger-3 { animation-delay: 150ms; }
+.stagger-4 { animation-delay: 200ms; }
+.stagger-5 { animation-delay: 250ms; }
+.stagger-6 { animation-delay: 300ms; }
+
+/* Animation fill mode helpers */
+.animate-fill-both {
+  animation-fill-mode: both;
+}
+
+/* ===== Custom Scrollbar ===== */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: theme('colors.stone.300') transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: theme('colors.stone.300');
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: theme('colors.stone.400');
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ===== Mobile Safe Areas ===== */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .mb-safe {
+    margin-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ===== Touch Optimizations ===== */
+@media (hover: none) and (pointer: coarse) {
+  /* Increase touch targets on mobile */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Disable hover effects on touch devices */
+  .touch-no-hover:hover {
+    transform: none !important;
+  }
+}
+
+/* ===== Transition Utilities ===== */
+.transition-smooth {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  transition-duration: 300ms;
+}
+
+/* ===== Focus Visible ===== */
+.focus-ring {
+  @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/30 focus-visible:ring-offset-2;
+}
+
+/* ===== Glass Effect ===== */
+.glass {
+  @apply bg-white/80 backdrop-blur-md;
+}
+
+.glass-dark {
+  @apply bg-stone-900/80 backdrop-blur-md;
+}
+
+/* ===== Pattern Backgrounds ===== */
+.pattern-dots {
+  background-image: radial-gradient(theme('colors.stone.300') 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* ===== Mobile Bottom Nav Height Variable ===== */
+:root {
+  --bottom-nav-height: 64px;
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --bottom-nav-height: 0px;
+  }
+}

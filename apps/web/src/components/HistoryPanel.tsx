@@ -12,7 +12,7 @@ interface HistoryPanelProps {
 export function HistoryPanel({ items, isLoading, onSelectImage, error }: HistoryPanelProps) {
   if (error === "unauthorized") {
     return (
-      <div className="mt-6 rounded-xl border border-stone-200 bg-stone-50 p-4 text-xs text-stone-500">
+      <div className="mt-6 rounded-2xl border border-stone-200 bg-stone-50 p-4 text-xs text-stone-500 animate-fade-in">
         This server requires an API key to show history. Add your key in the header to continue.
       </div>
     );
@@ -20,7 +20,7 @@ export function HistoryPanel({ items, isLoading, onSelectImage, error }: History
 
   if (error === "unknown") {
     return (
-      <div className="mt-6 rounded-xl border border-stone-200 bg-stone-50 p-4 text-xs text-stone-500">
+      <div className="mt-6 rounded-2xl border border-stone-200 bg-stone-50 p-4 text-xs text-stone-500 animate-fade-in">
         Unable to load history right now. Visit the History tab to try again.
       </div>
     );
@@ -30,26 +30,26 @@ export function HistoryPanel({ items, isLoading, onSelectImage, error }: History
   const displayItems = items.slice(0, 6);
 
   return (
-    <div className="mt-8 animate-slide-up">
+    <div className="mt-6 lg:mt-8 animate-fade-in">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-medium text-stone-800 tracking-tight">
+        <h2 className="text-sm font-semibold text-stone-800 tracking-tight">
           Recent Generations
         </h2>
         {isLoading && (
-          <span className="text-[10px] text-stone-400 animate-pulse">
+          <span className="text-[10px] text-stone-400 animate-pulse-soft">
             Loading...
           </span>
         )}
       </div>
 
       {items.length === 0 && !isLoading ? (
-        <div className="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-6 text-center">
+        <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-6 text-center">
           <p className="text-xs text-stone-500">
             No history yet.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-3 gap-2 lg:gap-3">
           {displayItems.map((item, index) => {
             if (!item.relative_path || item.status !== "SUCCESS") {
               return null;
@@ -57,30 +57,22 @@ export function HistoryPanel({ items, isLoading, onSelectImage, error }: History
 
             const imageUrl = getImageUrl(item.image_url || item.relative_path);
             
-            // Calculate aspect ratio class if possible, but since we want a clean grid,
-            // we'll stick to a fixed aspect ratio for the container but use object-cover
-            // carefully, or let it fit.
-            // For "清新" look, let's use a square container with object-cover (clean grid)
-            // BUT add a button to see full image.
-            // User complaint: "预览图比例和请求生成比例不符".
-            // If we want to respect aspect ratio in a grid, we can't use a simple grid.
-            // A compromise: use object-contain within a square bg-stone-100 box.
-            
             return (
               <button
                 key={item.task_id}
                 type="button"
                 onClick={() => onSelectImage(imageUrl)}
-                className="group relative rounded-2xl overflow-hidden border border-stone-200 hover:border-orange-300 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-300 bg-stone-50 aspect-square flex items-center justify-center"
-                style={{ animationDelay: `${index * 50}ms` }}
+                className="group relative rounded-xl lg:rounded-2xl overflow-hidden border border-stone-200 hover:border-orange-300 hover:shadow-lg hover:shadow-orange-500/10 hover:-translate-y-0.5 transition-all duration-300 bg-stone-50 aspect-square flex items-center justify-center animate-stagger-in"
+                style={{ animationDelay: `${index * 60}ms` }}
               >
-                 <div className="absolute inset-0 bg-stone-100" />
+                <div className="absolute inset-0 bg-stone-100" />
                 <img
                   src={imageUrl}
                   alt={item.prompt || "Generated image"}
-                  className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300"
+                  className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
+                  loading="lazy"
                 />
-                {/* Overlay for "View" */}
+                {/* Hover overlay */}
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
               </button>
             );

@@ -19,7 +19,7 @@ export function PromptInput({ prompt, setPrompt, onGenerate, isGenerating }: Pro
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 animate-fade-in">
       <div className="relative group">
         <textarea
           value={prompt}
@@ -27,13 +27,14 @@ export function PromptInput({ prompt, setPrompt, onGenerate, isGenerating }: Pro
           onKeyDown={handleKeyDown}
           placeholder="Imagine something wonderful..."
           disabled={isGenerating}
-          className="w-full min-h-[140px] p-5 pr-32 bg-white border border-stone-200 rounded-3xl text-lg text-stone-800 placeholder-stone-400 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-300 outline-none resize-none transition-all duration-300 shadow-sm group-hover:shadow-md"
+          className="w-full min-h-[120px] lg:min-h-[140px] p-4 lg:p-5 pr-4 pb-16 lg:pr-32 lg:pb-5 bg-white border border-stone-200 rounded-2xl lg:rounded-3xl text-base lg:text-lg text-stone-800 placeholder-stone-400 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-300 outline-none resize-none transition-all duration-300 shadow-sm group-hover:shadow-md"
         />
-        <div className="absolute bottom-3 right-3">
+        {/* Mobile: button at bottom, Desktop: button at bottom-right */}
+        <div className="absolute bottom-3 left-3 right-3 lg:left-auto lg:right-3">
           <button
             onClick={onGenerate}
             disabled={!prompt.trim() || isGenerating}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-300 ${
+            className={`w-full lg:w-auto flex items-center justify-center gap-2 px-5 lg:px-6 py-2.5 lg:py-3 rounded-xl lg:rounded-2xl font-semibold transition-all duration-300 ${
               !prompt.trim() || isGenerating
                 ? "bg-stone-100 text-stone-400 cursor-not-allowed"
                 : "bg-stone-900 text-white hover:bg-orange-600 hover:shadow-lg hover:shadow-orange-200 hover:-translate-y-0.5 active:scale-95"
@@ -53,12 +54,12 @@ export function PromptInput({ prompt, setPrompt, onGenerate, isGenerating }: Pro
           </button>
         </div>
       </div>
-      <div className="flex justify-between items-center px-2">
-        <p className="text-xs text-stone-400">
+      <div className="flex justify-between items-center px-1 lg:px-2">
+        <p className="text-[10px] lg:text-xs text-stone-400">
           Press <kbd className="font-sans bg-white px-1.5 py-0.5 rounded text-stone-500 border border-stone-200 shadow-sm text-[10px] font-medium">Enter</kbd> to generate
         </p>
-        <p className="text-xs text-stone-400 font-medium">
-           {prompt.length} chars
+        <p className="text-[10px] lg:text-xs text-stone-400 font-medium tabular-nums">
+          {prompt.length} chars
         </p>
       </div>
     </div>

@@ -39,8 +39,6 @@ export function BatchPreview({
   isCancelling,
 }: BatchPreviewProps) {
   if (!batchId || total <= 1) {
-    // Only show batch preview for 2 or more items.
-    // Single generation is handled by the main ResultViewer.
     return null;
   }
 
@@ -54,9 +52,9 @@ export function BatchPreview({
   const canCancel = Boolean(onCancel) && active > 0;
 
   return (
-    <div className="mt-8 rounded-3xl border border-stone-200 bg-white shadow-sm p-6 space-y-4 animate-slide-up">
+    <div className="mt-6 lg:mt-8 rounded-2xl lg:rounded-3xl border border-stone-200 bg-white shadow-sm p-4 lg:p-6 space-y-4 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           <p className="text-sm font-semibold text-stone-700">Batch Progress</p>
           <p className="text-xs text-stone-400 font-medium">
             {completed} of {total} completed
@@ -67,14 +65,14 @@ export function BatchPreview({
             type="button"
             onClick={onCancel}
             disabled={isCancelling}
-            className="text-xs px-4 py-2 rounded-full border border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            className="text-xs px-3 lg:px-4 py-2 rounded-full border border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-95"
           >
             {isCancelling ? "Cancelling..." : "Stop Remaining"}
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 lg:gap-3">
         {Array.from({ length: total }).map((_, index) => {
           const item = itemMap.get(index);
           const status: BatchPreviewStatus = item?.status ?? "pending";
@@ -86,16 +84,18 @@ export function BatchPreview({
                 key={`${batchId}-${index}`}
                 type="button"
                 onClick={() => onSelectImage(item.imageUrl!, item.width && item.height ? { width: item.width, height: item.height } : undefined)}
-                className="group relative rounded-2xl overflow-hidden border border-stone-200 hover:border-orange-300 hover:shadow-md transition-all aspect-square"
+                className="group relative rounded-xl lg:rounded-2xl overflow-hidden border border-stone-200 hover:border-orange-300 hover:shadow-md hover:-translate-y-0.5 transition-all aspect-square animate-stagger-in"
+                style={{ animationDelay: `${index * 80}ms` }}
               >
                 <div className="absolute inset-0 bg-stone-100" />
                 <img 
                   src={item.imageUrl} 
                   alt={`Batch image ${index + 1}`} 
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                  loading="lazy"
                 />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <p className="text-[10px] font-medium text-white">{label}</p>
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2.5 lg:px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <p className="text-[9px] lg:text-[10px] font-medium text-white">{label}</p>
                 </div>
               </button>
             );
@@ -105,29 +105,31 @@ export function BatchPreview({
           if (status === "error") {
             stateContent = (
               <div className="flex flex-col items-center justify-center text-center p-2 h-full">
-                <AlertTriangle className="h-5 w-5 text-amber-500 mb-2" />
-                <p className="text-[10px] font-medium text-amber-700 leading-tight">{item?.errorHint || label}</p>
+                <AlertTriangle className="size-4 lg:size-5 text-amber-500 mb-2" />
+                <p className="text-[9px] lg:text-[10px] font-medium text-amber-700 leading-tight">
+                  {item?.errorHint || label}
+                </p>
               </div>
             );
           } else if (status === "cancelled") {
             stateContent = (
               <div className="flex flex-col items-center justify-center text-center p-2 h-full">
-                <StopCircle className="h-5 w-5 text-stone-400 mb-2" />
-                <p className="text-[10px] font-medium text-stone-500">Cancelled</p>
+                <StopCircle className="size-4 lg:size-5 text-stone-400 mb-2" />
+                <p className="text-[9px] lg:text-[10px] font-medium text-stone-500">Cancelled</p>
               </div>
             );
           } else if (status === "running") {
             stateContent = (
               <div className="flex flex-col items-center justify-center text-center p-2 h-full">
-                <Loader2 className="h-6 w-6 text-orange-500 animate-spin mb-2" />
-                <p className="text-[10px] font-medium text-orange-600 animate-pulse">{label}</p>
+                <Loader2 className="size-5 lg:size-6 text-orange-500 animate-spin mb-2" />
+                <p className="text-[9px] lg:text-[10px] font-medium text-orange-600 animate-pulse-soft">{label}</p>
               </div>
             );
           } else {
             stateContent = (
               <div className="flex flex-col items-center justify-center text-center p-2 h-full text-stone-300">
-                <ImageIcon className="h-6 w-6 mb-2 opacity-50" />
-                <p className="text-[10px] font-medium">Queued</p>
+                <ImageIcon className="size-5 lg:size-6 mb-2 opacity-50" />
+                <p className="text-[9px] lg:text-[10px] font-medium">Queued</p>
               </div>
             );
           }
@@ -144,7 +146,8 @@ export function BatchPreview({
           return (
             <div
               key={`${batchId}-${index}`}
-              className={`rounded-2xl border ${borderClass} aspect-square flex items-center justify-center transition-all`}
+              className={`rounded-xl lg:rounded-2xl border ${borderClass} aspect-square flex items-center justify-center transition-all animate-stagger-in`}
+              style={{ animationDelay: `${index * 80}ms` }}
             >
               {stateContent}
             </div>
