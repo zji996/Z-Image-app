@@ -7,10 +7,13 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException
 
 from libs.py_core.celery_app import celery_app
+from libs.py_core.db import get_api_client_id_for_key, get_db_cursor
 from libs.py_core.tasks import generate_image_task
 from libs.py_core.types import GenerationResult
 
 from apps.api.schemas import (
+    BatchDetail,
+    BatchImageItem,
     CancelTaskResponse,
     DeleteTaskResponse,
     GenerateImageRequest,
@@ -19,15 +22,11 @@ from apps.api.schemas import (
     TaskSummary,
 )
 from apps.api.auth import (
-    ALL_TASKS_KEY,
-    USER_TASKS_KEY_PREFIX,
     AuthContext,
-    DELETED_TASKS_KEY,
     build_image_url,
     enforce_task_access,
     get_auth_context,
     get_auth_context_optional,
-    redis_client,
     settings,
 )
 
@@ -147,6 +146,8 @@ async def get_task_status(
     error_code: Optional[str] = None
     error_hint: Optional[str] = None
 
+    progress: Optional[int] = None
+
     if result.successful():
         raw_payload = result.result
         if isinstance(raw_payload, dict):
@@ -161,6 +162,10 @@ async def get_task_status(
         raw_error = result.result
         error_code, error_hint, detail = _decode_error_payload(raw_error)
         error = detail or str(raw_error)
+    elif status == "PROGRESS":
+        info = result.info
+        if isinstance(info, dict):
+            progress = info.get("progress")
 
     return TaskStatusResponse(
         task_id=task_id,
@@ -170,6 +175,7 @@ async def get_task_status(
         error_code=error_code,
         error_hint=error_hint,
         image_url=image_url,
+        progress=progress,
     )
 
 
@@ -205,32 +211,48 @@ async def cancel_task(
     )
 
 
-@router.delete("/history/{task_id}", response_model=DeleteTaskResponse)
+@router.delete("/history/{batch_id}", response_model=DeleteTaskResponse)
 async def soft_delete_history_item(
-    task_id: str,
-    auth: AuthContext = Depends(get_auth_context),
+    batch_id: str,
+    auth: AuthContext = Depends(get_auth_context_optional),
 ) -> DeleteTaskResponse:
     """
-    Soft delete a history item by task_id.
+    Delete a history batch by batch_id.
 
-    This does not remove any underlying files or Celery results; it only
-    marks the task as deleted in Redis so that subsequent history queries
-    stop returning it. When API auth is enabled, only the task owner or
-    an admin key may delete a given task.
+    This only affects the history metadata stored in PostgreSQL; the
+    underlying image files and Celery results are left untouched.
     """
 
-    result = AsyncResult(task_id, app=celery_app)
-    if result is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+    # Determine which api_client_id this caller is allowed to operate on.
+    api_client_id: Optional[str] = None
+    if settings.api_enable_auth and not auth.is_admin:
+        if not auth.key:
+            raise HTTPException(status_code=401, detail="Missing API auth key")
+        api_client_id = get_api_client_id_for_key(auth.key)
+        if api_client_id is None:
+            raise HTTPException(status_code=403, detail="Not allowed to delete this history item")
 
-    enforce_task_access(task_id, auth, result)
+    deleted = 0
+    with get_db_cursor() as cur:
+        params: list[object] = [batch_id]
+        where_clauses = ["id = %s"]
+        if api_client_id is not None:
+            where_clauses.append("api_client_id = %s")
+            params.append(api_client_id)
 
-    redis_client.sadd(DELETED_TASKS_KEY, task_id)
+        cur.execute(
+            f"DELETE FROM image_generation_batches WHERE {' AND '.join(where_clauses)};",
+            params,
+        )
+        deleted = cur.rowcount
+
+    if deleted == 0:
+        raise HTTPException(status_code=404, detail="History batch not found")
 
     return DeleteTaskResponse(
-        task_id=task_id,
+        task_id=batch_id,
         status="deleted",
-        message="Task hidden from history",
+        message="Batch deleted from history",
     )
 
 
@@ -241,81 +263,343 @@ async def list_history(
     auth: AuthContext = Depends(get_auth_context_optional),
 ) -> list[TaskSummary]:
     """
-    Return a simple per-key history of recent tasks.
+    Return recent generation batches for the current caller.
 
-    - For regular keys: returns the caller's own tasks.
-    - For admin key: returns recent tasks across all users.
+    - 普通 key：只返回该 key 对应的批次；
+    - 管理员 key：返回所有批次；
+    - 鉴权关闭且无 key：返回所有批次，用于开发预览。
+
+    注意：此接口现在按“批次”返回，一行代表一次点击生成；
+    `task_id` 字段此时等于 `batch_id`。
     """
 
     limit = max(1, min(limit, 50))
     offset = max(0, offset)
 
-    # Determine which Redis list to read from.
-    # - 管理员 key：查看全局历史（ALL_TASKS_KEY）
-    # - 未提供 key：也查看全局历史，用于开放式预览场景
-    # - 普通 key：只查看自己的任务列表
-    if auth.is_admin or not auth.key:
-        redis_key = ALL_TASKS_KEY
+    api_client_id: Optional[str] = None
+    if settings.api_enable_auth:
+        if auth.is_admin:
+            api_client_id = None
+        else:
+            if not auth.key:
+                raise HTTPException(status_code=401, detail="Missing API auth key")
+            api_client_id = get_api_client_id_for_key(auth.key)
+            if api_client_id is None:
+                return []
     else:
-        redis_key = f"{USER_TASKS_KEY_PREFIX}{auth.key}"
-
-    # Fetch a window of task IDs for this user/admin.
-    start = offset
-    end = offset + limit - 1
-    task_ids_bytes = redis_client.lrange(redis_key, start, end)
-    if not task_ids_bytes:
-        return []
+        # 鉴权关闭时，如果有 key 就按 key 过滤，否则返回全局历史。
+        if auth.key:
+            api_client_id = get_api_client_id_for_key(auth.key)
 
     summaries: list[TaskSummary] = []
-    for raw in task_ids_bytes:
-        task_id = raw.decode("utf-8")
+    with get_db_cursor() as cur:
+        params: list[object] = []
+        where_clauses: list[str] = []
 
-        # Skip tasks that have been soft-deleted from history.
-        if redis_client.sismember(DELETED_TASKS_KEY, task_id):
-            continue
+        if api_client_id is not None:
+            where_clauses.append("b.api_client_id = %s")
+            params.append(api_client_id)
 
-        result = AsyncResult(task_id, app=celery_app)
-        # Skip tasks that no longer exist in the backend.
-        if result is None:
-            continue
+        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
-        status = result.status
-        created_at: Optional[str] = None
-        prompt: Optional[str] = None
-        height: Optional[int] = None
-        width: Optional[int] = None
-        # We keep relative_path pointing at the original PNG path so that
-        # callers can still download lossless images, while image_url is
-        # used for the (potentially WebP) preview.
-        relative_path: Optional[str] = None
+        params.extend([limit, offset])
+
+        cur.execute(
+            f"""
+            SELECT
+                b.id,
+                b.status,
+                b.created_at,
+                b.prompt,
+                b.width,
+                b.height,
+                b.num_inference_steps,
+                b.guidance_scale,
+                b.base_seed,
+                b.batch_size,
+                b.success_count,
+                b.failed_count,
+                t.relative_path,
+                t.preview_relative_path,
+                t.width,
+                t.height,
+                t.seed
+            FROM image_generation_batches AS b
+            LEFT JOIN LATERAL (
+                SELECT
+                    relative_path,
+                    preview_relative_path,
+                    width,
+                    height,
+                    seed
+                FROM image_generation_tasks
+                WHERE batch_id = b.id AND status = 'success'
+                ORDER BY batch_index
+                LIMIT 1
+            ) AS t ON TRUE
+            {where_sql}
+            ORDER BY b.created_at DESC
+            LIMIT %s OFFSET %s;
+            """,
+            params,
+        )
+
+        rows = cur.fetchall()
+
+    for (
+        batch_id,
+        raw_status,
+        created_at,
+        prompt,
+        width,
+        height,
+        num_inference_steps,
+        guidance_scale,
+        base_seed,
+        batch_size,
+        success_count,
+        failed_count,
+        relative_path,
+        preview_relative_path,
+        item_width,
+        item_height,
+        seed,
+    ) in rows:
+        created_at_str = created_at.isoformat() if created_at is not None else None
+        rel = preview_relative_path or relative_path
         image_url: Optional[str] = None
+        if rel:
+            image_url = build_image_url(str(rel))
 
-        if result.successful():
-            raw_payload = result.result
-            if isinstance(raw_payload, dict):
-                payload = cast(GenerationResult, raw_payload)
-                created_at = payload["created_at"]
-                prompt = payload["prompt"]
-                height = payload["height"]
-                width = payload["width"]
-                # PNG relative path (for downloads).
-                relative_path = str(payload.get("relative_path") or "")
-                # Prefer WebP preview path when available.
-                preview_rel = payload.get("preview_relative_path") or relative_path
-                if preview_rel:
-                    image_url = build_image_url(str(preview_rel))
+        # Map internal batch status to a coarse UI-oriented status so
+        # existing front-end logic (e.g. SUCCESS filter) keeps working.
+        if raw_status in ("success", "partial"):
+            status = "SUCCESS"
+        elif raw_status in ("error", "cancelled"):
+            status = "FAILURE"
+        elif raw_status in ("pending", "running"):
+            status = "PENDING"
+        else:
+            status = raw_status
 
         summaries.append(
             TaskSummary(
-                task_id=task_id,
+                task_id=str(batch_id),
                 status=status,
-                created_at=created_at,
+                created_at=created_at_str,
                 prompt=prompt,
-                height=height,
-                width=width,
+                height=item_height or height,
+                width=item_width or width,
                 relative_path=relative_path,
                 image_url=image_url,
+                num_inference_steps=num_inference_steps,
+                guidance_scale=guidance_scale,
+                seed=seed if seed is not None else base_seed,
+                negative_prompt=None,
+                batch_size=batch_size,
+                success_count=success_count,
+                failed_count=failed_count,
+                base_seed=base_seed,
             )
         )
 
     return summaries
+
+
+@router.get("/history/{batch_id}", response_model=BatchDetail)
+async def get_history_batch_detail(
+    batch_id: str,
+    auth: AuthContext = Depends(get_auth_context_optional),
+) -> BatchDetail:
+    """
+    Get detailed information for a given generation batch, including all
+    per-image items. Non-admin callers只能访问自己的批次。
+    """
+
+    api_client_id: Optional[str] = None
+    if settings.api_enable_auth:
+        if auth.is_admin:
+            api_client_id = None
+        else:
+            if not auth.key:
+                raise HTTPException(status_code=401, detail="Missing API auth key")
+            api_client_id = get_api_client_id_for_key(auth.key)
+            if api_client_id is None:
+                raise HTTPException(status_code=404, detail="Batch not found")
+    else:
+        if auth.key:
+            api_client_id = get_api_client_id_for_key(auth.key)
+
+    with get_db_cursor() as cur:
+        # Fetch batch metadata + a representative preview image.
+        params: list[object] = [batch_id]
+        where_clauses = ["b.id = %s"]
+        if api_client_id is not None:
+            where_clauses.append("b.api_client_id = %s")
+            params.append(api_client_id)
+
+        where_sql = " AND ".join(where_clauses)
+
+        cur.execute(
+            f"""
+            SELECT
+                b.id,
+                b.status,
+                b.created_at,
+                b.prompt,
+                b.width,
+                b.height,
+                b.num_inference_steps,
+                b.guidance_scale,
+                b.base_seed,
+                b.batch_size,
+                b.success_count,
+                b.failed_count,
+                t.relative_path,
+                t.preview_relative_path,
+                t.width,
+                t.height,
+                t.seed
+            FROM image_generation_batches AS b
+            LEFT JOIN LATERAL (
+                SELECT
+                    relative_path,
+                    preview_relative_path,
+                    width,
+                    height,
+                    seed
+                FROM image_generation_tasks
+                WHERE batch_id = b.id AND status = 'success'
+                ORDER BY batch_index
+                LIMIT 1
+            ) AS t ON TRUE
+            WHERE {where_sql};
+            """,
+            params,
+        )
+
+        batch_row = cur.fetchone()
+        if not batch_row:
+            raise HTTPException(status_code=404, detail="Batch not found")
+
+        (
+            _batch_id,
+            status,
+            created_at,
+            prompt,
+            width,
+            height,
+            num_inference_steps,
+            guidance_scale,
+            base_seed,
+            batch_size,
+            success_count,
+            failed_count,
+            relative_path,
+            preview_relative_path,
+            item_width,
+            item_height,
+            seed,
+        ) = batch_row
+
+        created_at_str = created_at.isoformat() if created_at is not None else None
+        rel = preview_relative_path or relative_path
+        image_url: Optional[str] = None
+        if rel:
+            image_url = build_image_url(str(rel))
+
+        batch_summary = TaskSummary(
+            task_id=str(_batch_id),
+            status="SUCCESS"
+            if status in ("success", "partial")
+            else "FAILURE"
+            if status in ("error", "cancelled")
+            else "PENDING"
+            if status in ("pending", "running")
+            else status,
+            created_at=created_at_str,
+            prompt=prompt,
+            height=item_height or height,
+            width=item_width or width,
+            relative_path=relative_path,
+            image_url=image_url,
+            num_inference_steps=num_inference_steps,
+            guidance_scale=guidance_scale,
+            seed=seed if seed is not None else base_seed,
+            negative_prompt=None,
+            batch_size=batch_size,
+            success_count=success_count,
+            failed_count=failed_count,
+            base_seed=base_seed,
+        )
+
+        # Fetch all items in this batch.
+        cur.execute(
+            """
+            SELECT
+                task_id,
+                batch_index,
+                status,
+                relative_path,
+                preview_relative_path,
+                width,
+                height,
+                seed,
+                error_code,
+                error_hint
+            FROM image_generation_tasks
+            WHERE batch_id = %s
+            ORDER BY batch_index;
+            """,
+            (batch_id,),
+        )
+
+        item_rows = cur.fetchall()
+
+    items: list[BatchImageItem] = []
+    for (
+        task_id,
+        index,
+        status,
+        relative_path,
+        preview_relative_path,
+        width,
+        height,
+        seed,
+        error_code,
+        error_hint,
+    ) in item_rows:
+        rel_item = preview_relative_path or relative_path
+        image_url: Optional[str] = None
+        if rel_item:
+            image_url = build_image_url(str(rel_item))
+
+        # 对于正在运行的任务，从 Celery 获取实时进度
+        progress: Optional[int] = None
+        if status == "running":
+            try:
+                celery_result = AsyncResult(task_id, app=celery_app)
+                if celery_result.status == "PROGRESS" and isinstance(
+                    celery_result.info, dict
+                ):
+                    progress = celery_result.info.get("progress")
+            except Exception:
+                # 如果 Celery 查询失败，忽略错误，继续返回 progress=None
+                pass
+
+        items.append(
+            BatchImageItem(
+                task_id=task_id,
+                index=index,
+                status=status,
+                image_url=image_url,
+                width=width,
+                height=height,
+                seed=seed,
+                error_code=error_code,
+                error_hint=error_hint,
+                progress=progress,
+            )
+        )
+
+    return BatchDetail(batch=batch_summary, items=items)

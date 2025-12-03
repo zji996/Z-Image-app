@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, deleteHistoryItem, getHistory } from "../api/client";
-import type { TaskSummary } from "../api/types";
+import type { BatchSummary } from "../api/types";
 import type { HistoryError } from "../types/history";
 
 type LoadHistoryOptions = {
@@ -11,20 +11,23 @@ type LoadHistoryOptions = {
 const HISTORY_PAGE_SIZE = 24;
 
 interface UseHistoryResult {
-  items: TaskSummary[];
+  items: BatchSummary[];
   isLoading: boolean;
   error: HistoryError;
   hasMore: boolean;
   refresh: (clearBeforeFetch?: boolean) => void;
   loadMore: () => void;
-  deleteItem: (taskId: string) => Promise<void>;
+  deleteItem: (batchId: string) => Promise<void>;
+  deleteMany: (batchIds: string[]) => Promise<void>;
+  isDeletingMany: boolean;
 }
 
 export function useHistory(authKey: string): UseHistoryResult {
-  const [items, setItems] = useState<TaskSummary[]>([]);
+  const [items, setItems] = useState<BatchSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<HistoryError>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [isDeletingMany, setIsDeletingMany] = useState(false);
   const offsetRef = useRef(0);
 
   const loadHistory = useCallback(
@@ -79,14 +82,34 @@ export function useHistory(authKey: string): UseHistoryResult {
   }, [isLoading, hasMore, loadHistory]);
 
   const deleteItem = useCallback(
-    async (taskId: string) => {
+    async (batchId: string) => {
       try {
-        await deleteHistoryItem(taskId, authKey || "admin");
-        // Keep both HistoryPage and sidebar in sync.
+        await deleteHistoryItem(batchId, authKey || "admin");
+        // 刷新列表
         refresh(true);
       } catch (err) {
-        console.error("Failed to delete history item", err);
+        console.error("Failed to delete batch", err);
         throw err;
+      }
+    },
+    [authKey, refresh],
+  );
+
+  const deleteMany = useCallback(
+    async (batchIds: string[]) => {
+      if (!batchIds.length) return;
+      setIsDeletingMany(true);
+      try {
+        await Promise.all(
+          batchIds.map((id) =>
+            deleteHistoryItem(id, authKey || "admin").catch((err) => {
+              console.error(`Failed to delete batch ${id}`, err);
+            }),
+          ),
+        );
+        refresh(true);
+      } finally {
+        setIsDeletingMany(false);
       }
     },
     [authKey, refresh],
@@ -104,5 +127,7 @@ export function useHistory(authKey: string): UseHistoryResult {
     refresh,
     loadMore,
     deleteItem,
+    deleteMany,
+    isDeletingMany,
   };
 }

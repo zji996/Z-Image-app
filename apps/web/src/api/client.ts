@@ -1,9 +1,10 @@
 import {
+  BatchDetail,
+  BatchSummary,
   CancelTaskResponse,
   GenerateImageRequest,
   GenerateImageResponse,
   TaskStatusResponse,
-  TaskSummary,
 } from "./types";
 
 export class ApiError extends Error {
@@ -63,7 +64,24 @@ export const getImageUrl = (relativePathOrUrl: string): string => {
   return `/generated-images/${relativePathOrUrl}`;
 };
 
-export const getHistory = async (authKey?: string, limit = 20, offset = 0): Promise<TaskSummary[]> => {
+/**
+ * 将预览 URL（可能是 webp）转换为下载用的 PNG URL
+ * 用于下载按钮，确保用户下载的是原始 PNG 而不是压缩后的 webp
+ */
+export const getDownloadUrl = (imageUrl: string): string => {
+  if (!imageUrl) return "#";
+  const [base, query] = imageUrl.split("?");
+  if (base.toLowerCase().endsWith(".webp")) {
+    const pngBase = `${base.slice(0, -5)}.png`;
+    return query ? `${pngBase}?${query}` : pngBase;
+  }
+  return imageUrl;
+};
+
+/**
+ * 获取历史批次列表
+ */
+export const getHistory = async (authKey?: string, limit = 20, offset = 0): Promise<BatchSummary[]> => {
   const params = new URLSearchParams();
   params.set("limit", String(limit));
   params.set("offset", String(Math.max(offset, 0)));
@@ -76,7 +94,22 @@ export const getHistory = async (authKey?: string, limit = 20, offset = 0): Prom
     throw new ApiError(`Error fetching history: ${response.statusText}`, response.status);
   }
 
-  return response.json() as Promise<TaskSummary[]>;
+  return response.json() as Promise<BatchSummary[]>;
+};
+
+/**
+ * 获取批次详情，包含批次内所有图片状态
+ */
+export const getBatchDetail = async (batchId: string, authKey?: string): Promise<BatchDetail> => {
+  const response = await fetch(`/v1/history/${batchId}`, {
+    headers: buildHeaders(authKey),
+  });
+
+  if (!response.ok) {
+    throw new ApiError(`Error fetching batch detail: ${response.statusText}`, response.status);
+  }
+
+  return response.json() as Promise<BatchDetail>;
 };
 
 export const cancelTask = async (taskId: string, authKey?: string): Promise<CancelTaskResponse> => {
@@ -92,13 +125,13 @@ export const cancelTask = async (taskId: string, authKey?: string): Promise<Canc
   return response.json() as Promise<CancelTaskResponse>;
 };
 
-export const deleteHistoryItem = async (taskId: string, authKey?: string): Promise<void> => {
-  const response = await fetch(`/v1/history/${taskId}`, {
+export const deleteHistoryItem = async (batchId: string, authKey?: string): Promise<void> => {
+  const response = await fetch(`/v1/history/${batchId}`, {
     method: "DELETE",
     headers: buildHeaders(authKey),
   });
 
   if (!response.ok) {
-    throw new ApiError(`Error deleting history item: ${response.statusText}`, response.status);
+    throw new ApiError(`Error deleting batch: ${response.statusText}`, response.status);
   }
 };

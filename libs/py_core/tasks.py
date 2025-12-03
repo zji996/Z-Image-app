@@ -5,6 +5,11 @@ import uuid
 from datetime import datetime, timezone
 from .celery_app import celery_app
 from .config import get_output_root
+from .db import (
+    record_generation_failed,
+    record_generation_started,
+    record_generation_succeeded,
+)
 from .z_image_pipeline import ZImageNotAvailable, generate_image
 from .types import GenerationResult, JSONDict
 
@@ -45,8 +50,9 @@ def _classify_generation_exception(exc: Exception) -> tuple[str, str]:
     return "internal_error", "生成过程中出现未知异常，请稍后重试。"
 
 
-@celery_app.task(name="z_image.generate_image")
+@celery_app.task(name="z_image.generate_image", bind=True)
 def generate_image_task(
+    self,
     prompt: str,
     *,
     height: int = 1024,
@@ -67,9 +73,33 @@ def generate_image_task(
     """
 
     image_id = uuid.uuid4().hex
+    task_id = self.request.id or image_id
     now = datetime.now(timezone.utc)
 
     normalized_negative_prompt = negative_prompt if negative_prompt is not None else ""
+
+    def progress_callback(step: int, timestep: int, latents: object) -> None:
+        # Calculate progress percentage (0-100)
+        # step is 0-indexed, so we add 1.
+        progress = int(((step + 1) / num_inference_steps) * 100)
+        self.update_state(state="PROGRESS", meta={"progress": progress})
+
+    # Record the fact that the worker picked up this task in the DB.
+    record_generation_started(
+        task_id,
+        prompt=prompt,
+        height=height,
+        width=width,
+        num_inference_steps=num_inference_steps,
+        guidance_scale=guidance_scale,
+        seed=seed,
+        negative_prompt=normalized_negative_prompt,
+        cfg_normalization=cfg_normalization,
+        cfg_truncation=cfg_truncation,
+        max_sequence_length=max_sequence_length,
+        auth_key=auth_key,
+        metadata=metadata,
+    )
 
     try:
         image = generate_image(
@@ -83,10 +113,21 @@ def generate_image_task(
             cfg_normalization=cfg_normalization,
             cfg_truncation=cfg_truncation,
             max_sequence_length=max_sequence_length,
+            callback=progress_callback,
+            callback_steps=1,
         )
     except Exception as exc:  # pragma: no cover - runtime only
         code, hint = _classify_generation_exception(exc)
         detail = str(exc)
+        # Best-effort recording of failure to the DB. Any DB errors are
+        # swallowed inside record_generation_failed so they don't impact
+        # user-facing behaviour.
+        record_generation_failed(
+            task_id,
+            error_code=code,
+            error_hint=hint,
+            error_message=detail,
+        )
         raise RuntimeError(_serialize_generation_error(code, hint, detail)) from exc
 
     output_root = get_output_root()
@@ -115,7 +156,7 @@ def generate_image_task(
         webp_output_path = png_output_path
         preview_relative_path = png_relative_path
 
-    return {
+    result: GenerationResult = {
         "image_id": image_id,
         "prompt": prompt,
         "height": height,
@@ -137,3 +178,8 @@ def generate_image_task(
         "preview_output_path": str(webp_output_path),
         "preview_relative_path": str(preview_relative_path),
     }
+
+    # Persist the successful generation to the DB (fire-and-forget).
+    record_generation_succeeded(task_id, result)
+
+    return result

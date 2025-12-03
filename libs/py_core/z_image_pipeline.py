@@ -600,6 +600,8 @@ def generate_image(
     cfg_normalization: bool | None = None,
     cfg_truncation: float | None = None,
     max_sequence_length: int | None = None,
+    callback: Callable[[int, int, object], None] | None = None,
+    callback_steps: int = 1,
 ) -> object:
     """
     Helper for running a single Z-Image generation step using the shared
@@ -634,6 +636,28 @@ def generate_image(
         call_kwargs["cfg_truncation"] = cfg_truncation
     if max_sequence_length is not None:
         call_kwargs["max_sequence_length"] = max_sequence_length
+
+    if callback is not None:
+        def _on_step_end(
+            pipe: ZImagePipelineProtocol,
+            step: int,
+            timestep: int,
+            callback_kwargs: dict[str, object],
+        ) -> dict[str, object]:
+            # The underlying pipeline passes latents (and optionally other tensors)
+            # via callback_kwargs; our public callback only cares about progress.
+            if callback_steps <= 1 or (step + 1) % callback_steps == 0 or (step + 1) == num_inference_steps:
+                latents = callback_kwargs.get("latents")
+                callback(step, timestep, latents)
+
+            # Conform to diffusers' expected contract: return a dict of tensors,
+            # typically including (but not limited to) "latents".
+            return callback_kwargs
+
+        call_kwargs["callback_on_step_end"] = _on_step_end
+        # Ensure that latents are included in callback_kwargs so our wrapper can
+        # forward them to the public callback (even if currently unused).
+        call_kwargs["callback_on_step_end_tensor_inputs"] = ["latents"]
 
     result = pipeline(**call_kwargs)
     return result.images[0]

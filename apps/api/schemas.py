@@ -37,6 +37,7 @@ class TaskStatusResponse(BaseModel):
     error_code: Optional[str] = None
     error_hint: Optional[str] = None
     image_url: Optional[str] = None
+    progress: Optional[int] = None
 
 
 class TaskSummary(BaseModel):
@@ -48,6 +49,32 @@ class TaskSummary(BaseModel):
     width: Optional[int] = None
     relative_path: Optional[str] = None
     image_url: Optional[str] = None
+    num_inference_steps: Optional[int] = None
+    guidance_scale: Optional[float] = None
+    seed: Optional[int] = None
+    negative_prompt: Optional[str] = None
+    batch_size: Optional[int] = None
+    success_count: Optional[int] = None
+    failed_count: Optional[int] = None
+    base_seed: Optional[int] = None
+
+
+class BatchImageItem(BaseModel):
+    task_id: str
+    index: int
+    status: str
+    image_url: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    seed: Optional[int] = None
+    error_code: Optional[str] = None
+    error_hint: Optional[str] = None
+    progress: Optional[int] = None  # 任务进度（0-100），仅在 status 为 running 时有意义
+
+
+class BatchDetail(BaseModel):
+    batch: TaskSummary
+    items: list[BatchImageItem]
 
 
 class CancelTaskResponse(BaseModel):

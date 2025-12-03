@@ -1,7 +1,8 @@
-import { Download, Loader2, AlertCircle, Maximize2, StopCircle, Image as ImageIcon, AlertTriangle, X } from "lucide-react";
+import { Download, Loader2, AlertCircle, Maximize2, X, Image as ImageIcon, AlertTriangle, StopCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../i18n";
 import type { TranslationKey } from "../i18n/translations";
+import { getDownloadUrl } from "../api/client";
 
 export type GenerationStatus = "idle" | "pending" | "generating" | "success" | "error";
 export type BatchItemStatus = "pending" | "running" | "success" | "error" | "cancelled";
@@ -13,8 +14,10 @@ export interface BatchItem {
   imageUrl?: string;
   width?: number;
   height?: number;
+  seed?: number | null;
   errorCode?: string | null;
   errorHint?: string | null;
+  progress?: number;
 }
 
 interface GenerationViewerProps {
@@ -24,12 +27,13 @@ interface GenerationViewerProps {
   generationTime?: number;
   width?: number;
   height?: number;
-  // Batch properties
   batchId?: string | null;
   batchTotal?: number;
   batchItems?: BatchItem[];
+   batchCompleted?: number;
+   batchFailed?: number;
   isCancelling?: boolean;
-  onSelectImage?: (url: string, size?: { width: number; height: number }) => void;
+  onSelectImage?: (url: string, size?: { width: number; height: number }, options?: { keepBatchState?: boolean }) => void;
   onCancel?: () => void;
 }
 
@@ -50,6 +54,8 @@ export function GenerationViewer({
   batchId,
   batchTotal = 1,
   batchItems = [],
+  batchCompleted,
+  batchFailed,
   isCancelling = false,
   onSelectImage,
   onCancel,
@@ -59,17 +65,24 @@ export function GenerationViewer({
   const itemMap = new Map<number, BatchItem>();
   batchItems.forEach((item) => itemMap.set(item.index, item));
   const sortedItems = [...itemMap.values()].sort((a, b) => a.index - b.index);
-  
-  const completed = sortedItems.filter((item) => item.status === "success").length;
-  const failed = sortedItems.filter((item) => item.status === "error" || item.status === "cancelled").length;
+
+  const completedFromItems = sortedItems.filter((item) => item.status === "success").length;
+  const failedFromItems = sortedItems.filter((item) => item.status === "error" || item.status === "cancelled").length;
+  const completed = typeof batchCompleted === "number" ? batchCompleted : completedFromItems;
+  const failed = typeof batchFailed === "number" ? batchFailed : failedFromItems;
   const active = sortedItems.filter((item) => item.status === "pending" || item.status === "running").length;
   const isGenerating = status === "pending" || status === "generating";
   const canCancel = Boolean(onCancel) && isGenerating && active > 0;
 
-  // Progress calculation
-  const progress = batchTotal > 0 ? ((completed + failed) / batchTotal) * 100 : 0;
+  // 进度计算
+  const runningItems = sortedItems.filter((item) => item.status === "running");
+  const runningSumFraction = runningItems.reduce((sum, item) => sum + ((item.progress ?? 50) / 100), 0);
+  const progress =
+    batchTotal > 0
+      ? (((completed + failed) + runningSumFraction) / batchTotal) * 100
+      : 0;
 
-  // Idle state
+  // 空闲状态
   if (status === "idle") {
     return (
       <div className="bg-white rounded-3xl border border-stone-200 overflow-hidden animate-fade-in">
@@ -92,14 +105,13 @@ export function GenerationViewer({
       <div className="flex items-center justify-between px-4 lg:px-6 py-3 lg:py-4 border-b border-stone-100 bg-stone-50/50">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           {/* Status indicator */}
-          <div className={`size-2.5 rounded-full flex-shrink-0 ${
-            status === "error" || (completed === 0 && failed > 0)
-              ? "bg-rose-500" 
-              : isGenerating 
-                ? "bg-orange-500 animate-pulse" 
-                : "bg-emerald-500"
-          }`} />
-          
+          <div className={`size-2.5 rounded-full flex-shrink-0 ${status === "error" || (completed === 0 && failed > 0)
+            ? "bg-rose-500"
+            : isGenerating
+              ? "bg-orange-500 animate-pulse"
+              : "bg-emerald-500"
+            }`} />
+
           {/* Status text and progress */}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -107,11 +119,11 @@ export function GenerationViewer({
                 {t("batch.subtitle", { completed, total: batchTotal })}
               </span>
             </div>
-            
+
             {/* Progress bar - always show when generating */}
             {isGenerating && (
               <div className="mt-1.5 h-1 bg-stone-200 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-gradient-to-r from-orange-500 to-amber-500 transition-all duration-500 ease-out"
                   style={{ width: `${Math.max(progress, 5)}%` }}
                 />
@@ -119,7 +131,7 @@ export function GenerationViewer({
             )}
           </div>
         </div>
-        
+
         {/* Cancel button - always visible when generating */}
         {canCancel && (
           <button
@@ -150,7 +162,7 @@ export function GenerationViewer({
           <div className="relative group">
             <div className="relative flex items-center justify-center bg-stone-50 min-h-[250px] lg:min-h-[300px] rounded-2xl overflow-hidden">
               <div className="absolute inset-0 pattern-dots opacity-[0.03]" />
-              
+
               {imageUrl ? (
                 <img
                   src={imageUrl}
@@ -174,7 +186,7 @@ export function GenerationViewer({
                 </div>
               ) : null}
             </div>
-            
+
             {/* Hover overlay - only when image exists */}
             {imageUrl && (
               <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-end justify-between rounded-b-2xl">
@@ -182,30 +194,16 @@ export function GenerationViewer({
                   {width && height ? `${width}×${height}` : "1024×1024"}
                 </p>
                 <div className="flex gap-2">
-                  {(() => {
-                    const href = (() => {
-                      if (!imageUrl) return "#";
-                      const [base, query] = imageUrl.split("?");
-                      if (base.toLowerCase().endsWith(".webp")) {
-                        const pngBase = `${base.slice(0, -5)}.png`;
-                        return query ? `${pngBase}?${query}` : pngBase;
-                      }
-                      return imageUrl;
-                    })();
-
-                    return (
-                      <a
-                        href={href}
-                        download={`z-image-${Date.now()}.png`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2 rounded-lg bg-white/10 backdrop-blur-md text-white hover:bg-white hover:text-stone-900 transition-all shadow-lg active:scale-95"
-                        title={t("result.download")}
-                      >
-                        <Download size={16} />
-                      </a>
-                    );
-                  })()}
+                  <a
+                    href={getDownloadUrl(imageUrl)}
+                    download={`z-image-${Date.now()}.png`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-2 rounded-lg bg-white/10 backdrop-blur-md text-white hover:bg-white hover:text-stone-900 transition-all shadow-lg active:scale-95"
+                    title={t("result.download")}
+                  >
+                    <Download size={16} />
+                  </a>
                   <button
                     type="button"
                     onClick={() => window.open(imageUrl || "#", "_blank")}
@@ -220,15 +218,14 @@ export function GenerationViewer({
           </div>
 
           {/* Thumbnails grid - always show */}
-          <div className={`grid gap-2 lg:gap-3 ${
-            batchTotal === 1 
-              ? "grid-cols-1 max-w-[120px]" 
-              : batchTotal === 2 
-                ? "grid-cols-2 max-w-[250px]"
-                : batchTotal <= 4 
-                  ? "grid-cols-4"
-                  : "grid-cols-3 sm:grid-cols-4 lg:grid-cols-5"
-          }`}>
+          <div className={`grid gap-2 lg:gap-3 ${batchTotal === 1
+            ? "grid-cols-1 max-w-[80px]"
+            : batchTotal === 2
+              ? "grid-cols-2 max-w-[168px]"
+              : batchTotal <= 4
+                ? "grid-cols-4 max-w-[344px]"
+                : "grid-cols-5 max-w-[440px]"
+            }`}>
             {Array.from({ length: batchTotal }).map((_, index) => {
               const item = itemMap.get(index);
               const itemStatus: BatchItemStatus = item?.status ?? "pending";
@@ -240,16 +237,15 @@ export function GenerationViewer({
                   <button
                     key={`${batchId}-${index}`}
                     type="button"
-                    onClick={() => onSelectImage?.(item.imageUrl!, item.width && item.height ? { width: item.width, height: item.height } : undefined)}
-                    className={`group relative rounded-xl overflow-hidden border-2 hover:border-orange-300 hover:shadow-md hover:-translate-y-0.5 transition-all aspect-square animate-stagger-in ${
-                      isCurrentlySelected ? "border-orange-500 ring-2 ring-orange-200" : "border-stone-200"
-                    }`}
+                    onClick={() => onSelectImage?.(item.imageUrl!, item.width && item.height ? { width: item.width, height: item.height } : undefined, { keepBatchState: true })}
+                    className={`group relative rounded-xl overflow-hidden border-2 hover:border-orange-300 hover:shadow-md hover:-translate-y-0.5 transition-all aspect-square animate-stagger-in ${isCurrentlySelected ? "border-orange-500 ring-2 ring-orange-200" : "border-stone-200"
+                      }`}
                     style={{ animationDelay: `${index * 60}ms` }}
                   >
-                    <img 
-                      src={item.imageUrl} 
-                      alt={t("batch.alt", { index: index + 1 })} 
-                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                    <img
+                      src={item.imageUrl}
+                      alt={t("batch.alt", { index: index + 1 })}
+                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       loading="lazy"
                     />
                     {isCurrentlySelected && (
@@ -296,10 +292,10 @@ export function GenerationViewer({
                 itemStatus === "error"
                   ? "border-amber-200 bg-amber-50"
                   : itemStatus === "cancelled"
-                  ? "border-stone-200 bg-stone-50"
-                  : itemStatus === "running"
-                  ? "border-orange-200 bg-orange-50"
-                  : "border-stone-100 bg-stone-50/50";
+                    ? "border-stone-200 bg-stone-50"
+                    : itemStatus === "running"
+                      ? "border-orange-200 bg-orange-50"
+                      : "border-stone-100 bg-stone-50/50";
 
               return (
                 <div
