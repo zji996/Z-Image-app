@@ -1,5 +1,6 @@
 import { Settings2, Square, RectangleHorizontal, RectangleVertical, Smartphone, Monitor, ChevronDown } from "lucide-react";
 import { useState } from "react";
+import { useI18n } from "../i18n";
 
 interface AdvancedSettingsProps {
   settings: {
@@ -22,13 +23,14 @@ const ASPECT_RATIOS = [
 ];
 
 const SIZES = [
-  { label: "Small", value: 512 },
-  { label: "Normal", value: 768 },
-  { label: "Large", value: 1024 },
-  { label: "Max", value: 1280 },
-];
+  { labelKey: "advanced.size.small", value: 512 },
+  { labelKey: "advanced.size.normal", value: 768 },
+  { labelKey: "advanced.size.large", value: 1024 },
+  { labelKey: "advanced.size.max", value: 1280 },
+] as const;
 
 export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
 
   const handleRatioChange = (ratio: typeof ASPECT_RATIOS[0]) => {
@@ -68,7 +70,7 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
       >
         <div className="flex items-center gap-2.5 lg:gap-3 text-stone-600">
           <Settings2 size={18} className="text-stone-400" />
-          <span className="font-semibold text-sm">Advanced Settings</span>
+          <span className="font-semibold text-sm">{t("advanced.title")}</span>
         </div>
         <ChevronDown 
           size={16} 
@@ -84,7 +86,7 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <label className="text-[10px] lg:text-[11px] uppercase text-stone-500 font-bold tracking-wider pl-1">
-                  Aspect Ratio
+                  {t("advanced.aspectRatio")}
                 </label>
                 <span className="text-[10px] font-mono text-stone-400">
                   {settings.width} × {settings.height}
@@ -115,7 +117,7 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
 
             <div className="space-y-3">
               <label className="text-[10px] lg:text-[11px] uppercase text-stone-500 font-bold tracking-wider pl-1">
-                Image Size
+                {t("advanced.imageSize")}
               </label>
               <div className="grid grid-cols-4 gap-1.5 lg:gap-2">
                 {SIZES.map((s) => {
@@ -130,7 +132,7 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
                           : "bg-white border-stone-200 text-stone-500 hover:border-stone-300 hover:bg-stone-50 active:scale-95"
                       }`}
                     >
-                      {s.label}
+                      {t(s.labelKey)}
                       <div className="text-[8px] lg:text-[9px] opacity-60 font-normal mt-0.5">{s.value}px</div>
                     </button>
                   );
@@ -143,7 +145,7 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
           <div className="space-y-3 lg:space-y-4">
             <div className="flex justify-between text-xs items-center">
               <label className="text-stone-500 font-bold uppercase tracking-wider text-[10px] lg:text-xs">
-                Inference Steps
+                {t("advanced.stepsLabel")}
               </label>
               <span className="bg-white px-2 py-1 rounded-lg text-stone-600 font-mono border border-stone-200 text-[10px] shadow-sm">
                 {settings.steps}
@@ -159,7 +161,7 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
               className="w-full h-1.5 bg-stone-200 rounded-full appearance-none cursor-pointer accent-stone-800 hover:accent-orange-500 transition-all"
             />
             <p className="text-[10px] text-stone-400 pl-1">
-              Quality vs. Speed. Turbo models work best with 4-10 steps.
+              {t("advanced.stepsHint")}
             </p>
           </div>
 
@@ -167,7 +169,7 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
           <div className="space-y-3 lg:space-y-4">
             <div className="flex justify-between text-xs items-center">
               <label className="text-stone-500 font-bold uppercase tracking-wider text-[10px] lg:text-xs">
-                Guidance Scale
+                {t("advanced.guidanceLabel")}
               </label>
               <span className="bg-white px-2 py-1 rounded-lg text-stone-600 font-mono border border-stone-200 text-[10px] shadow-sm">
                 {settings.guidance.toFixed(1)}
@@ -183,7 +185,7 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
               className="w-full h-1.5 bg-stone-200 rounded-full appearance-none cursor-pointer accent-stone-800 hover:accent-orange-500 transition-all"
             />
             <p className="text-[10px] text-stone-400 pl-1">
-              Prompt adherence. Higher values respect the prompt more strictly.
+              {t("advanced.guidanceHint")}
             </p>
           </div>
 
@@ -191,7 +193,7 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
           <div className="space-y-3 lg:space-y-4">
             <div className="flex justify-between text-xs items-center">
               <label className="text-stone-500 font-bold uppercase tracking-wider text-[10px] lg:text-xs">
-                Batch Size
+                {t("advanced.batchLabel")}
               </label>
               <span className="bg-white px-2 py-1 rounded-lg text-stone-600 font-mono border border-stone-200 text-[10px] shadow-sm">
                 {settings.images ?? 1}
@@ -207,7 +209,7 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
               className="w-full h-1.5 bg-stone-200 rounded-full appearance-none cursor-pointer accent-stone-800 hover:accent-orange-500 transition-all"
             />
             <p className="text-[10px] text-stone-400 pl-1">
-              Generate up to 4 variations at once.
+              {t("advanced.batchHint")}
             </p>
           </div>
 
@@ -215,19 +217,19 @@ export function AdvancedSettings({ settings, onChange }: AdvancedSettingsProps) 
           <div className="space-y-2">
             <div className="flex justify-between text-xs items-center">
               <label className="text-stone-500 font-bold uppercase tracking-wider text-[10px] lg:text-xs pl-1">
-                Seed
+                {t("advanced.seedLabel")}
               </label>
               <button 
                 className="text-[10px] text-orange-600 hover:text-orange-700 font-medium transition-colors active:scale-95" 
                 onClick={() => onChange({ seed: null })} 
-                title="Click to randomize"
+                title={t("advanced.seedResetTitle")}
               >
-                Reset to Random
+                {t("advanced.seedReset")}
               </button>
             </div>
             <input
               type="number"
-              placeholder="Random (-1)"
+              placeholder={t("advanced.seedPlaceholder")}
               value={settings.seed ?? ""}
               onChange={(e) => onChange({ seed: e.target.value ? Number(e.target.value) : null })}
               className="w-full bg-white border border-stone-200 rounded-xl px-4 py-2.5 text-sm text-stone-700 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 outline-none font-mono transition-all shadow-sm placeholder-stone-300"

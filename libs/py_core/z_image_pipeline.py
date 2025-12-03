@@ -62,6 +62,72 @@ def _env_flag_enabled(name: str) -> bool:
     return value in {"1", "true", "yes"}
 
 
+def _resolve_attn_implementation(torch: TorchModule) -> str | None:
+    """
+    Best-effort resolver for the attention implementation.
+
+    - Respects an explicit Z_IMAGE_ATTN_IMPL override.
+    - Otherwise, prefers FlashAttention-2 when available, then FlashAttention-3.
+    - Falls back to the library default (typically SDPA) when custom kernels
+      or CUDA are not available.
+    """
+
+    # No custom kernels on CPU-only setups.
+    if not getattr(torch, "cuda", None) or not torch.cuda.is_available():  # pragma: no cover - hardware dependent
+        return None
+
+    override = os.getenv("Z_IMAGE_ATTN_IMPL")
+    if override is not None:
+        override = override.strip()
+        if override.lower() in {"", "none", "off", "disable"}:
+            return None
+        return override
+
+    # Auto-detect: prefer FlashAttention 2, then FlashAttention 3.
+    try:
+        __import__("flash_attn")
+    except Exception:
+        try:
+            __import__("flash_attn_3")
+        except Exception:
+            return None
+        else:
+            return "flash_attention_3"
+    else:
+        return "flash_attention_2"
+
+
+def _maybe_enable_flash_attention(
+    pipe: ZImagePipelineProtocol,
+    *,
+    torch: TorchModule,
+) -> None:
+    """
+    Optionally switch the text encoder to FlashAttention-backed kernels.
+
+    This is a no-op when:
+      - running on CPU,
+      - flash-attn 2/3 is not installed,
+      - or the underlying model does not support dynamic attn switching.
+    """
+
+    attn_impl = _resolve_attn_implementation(torch)
+    if attn_impl is None:
+        return
+
+    text_encoder = getattr(pipe, "text_encoder", None)
+    set_attn = getattr(text_encoder, "set_attn_implementation", None)
+    if not callable(set_attn):
+        return
+
+    try:  # pragma: no cover - runtime/hardware dependent
+        set_attn(attn_impl)
+    except Exception:
+        # If FlashAttention cannot be dispatched (missing package, wrong GPU,
+        # etc.), silently fall back to the default implementation.
+        return
+
+
 # 默认使用 Turbo 版本，后续 Base / Edit 发布后可以通过环境变量切换
 DEFAULT_Z_IMAGE_MODEL_ID = "Tongyi-MAI/Z-Image-Turbo"
 
@@ -509,7 +575,16 @@ def get_zimage_pipeline(device: str | None = None, model_id: str | None = None) 
             ),
         )
 
+    # 先将整个 pipeline 移到目标设备，再切换注意力实现，避免在 CPU 上启用
+    # FlashAttention 相关 kernel 时触发警告。
     pipe.to(target_device)
+
+    # Try to enable FlashAttention (v2 preferred, then v3) on the text
+    # encoder when available. This is a best-effort optimization and will
+    # transparently fall back to the default attention implementation when
+    # the required kernels or hardware are not present.
+    _maybe_enable_flash_attention(pipe, torch=torch)
+
     return pipe
 
 

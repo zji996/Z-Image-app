@@ -1,8 +1,7 @@
-import { Zap, Box, PenTool } from "lucide-react";
+import { useI18n } from "../i18n";
 
-interface SidebarProps {}
-
-export function Sidebar({}: SidebarProps) {
+export function Sidebar() {
+  const { t } = useI18n();
   return (
     <aside className="w-80 border-r border-slate-800 h-[calc(100vh-73px)] overflow-y-auto p-4 bg-slate-950 hidden lg:block">
       <div className="space-y-3 text-xs text-slate-500">
@@ -10,7 +9,7 @@ export function Sidebar({}: SidebarProps) {
           Z-Image
         </p>
         <p className="text-slate-500">
-          Text-to-image generation powered by the Z-Image family of models.
+          {t("sidebar.tagline")}
         </p>
       </div>
     </aside>

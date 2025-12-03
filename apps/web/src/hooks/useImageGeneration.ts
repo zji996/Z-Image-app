@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, cancelTask, generateImage, getImageUrl, getTaskStatus } from "../api/client";
-import type { BatchPreviewItem } from "../components/BatchPreview";
+import type { BatchItem } from "../components/GenerationViewer";
+import type { ImageSelectionInfo } from "../api/types";
+import { useI18n } from "../i18n";
+import type { Translator } from "../i18n";
+import type { TranslationKey } from "../i18n/translations";
 
 type GenerationStatus = "idle" | "pending" | "generating" | "success" | "error";
 
@@ -29,7 +33,6 @@ interface UseImageGenerationResult {
   setPrompt: (value: string) => void;
   settings: GenerationSettings;
   updateSettings: (updates: Partial<GenerationSettings>) => void;
-  handleSettingsChange: (key: keyof GenerationSettings, value: number | null) => void;
   status: GenerationStatus;
   imageUrl: string | null;
   error?: string;
@@ -37,26 +40,32 @@ interface UseImageGenerationResult {
   lastSize: { width: number; height: number } | null;
   isSubmitting: boolean;
   currentBatchMeta: BatchMeta | null;
-  currentBatchItems: BatchPreviewItem[];
+  currentBatchItems: BatchItem[];
   isCancellingBatch: boolean;
   handleGenerate: () => Promise<void>;
   handleCancelBatch: () => Promise<void>;
   selectImage: (url: string, size?: { width: number; height: number }) => void;
+  loadFromHistory: (info: ImageSelectionInfo) => void;
 }
 
 const DEFAULT_MAX_ACTIVE_TASKS = 8;
 
-const ERROR_HINT_MAP: Record<string, string> = {
-  gpu_oom: "GPU 显存不足，请降低分辨率或 steps 后重试。",
-  dependency_missing: "推理环境缺少必要依赖，请检查 worker 日志。",
-  model_missing: "未找到模型权重，请先准备 MODELS_DIR。",
-  internal_error: "生成过程中出现未知异常，请稍后再试。",
-  cancelled: "任务已取消。",
+const ERROR_HINT_KEYS: Record<string, TranslationKey> = {
+  gpu_oom: "errors.gpuOom",
+  dependency_missing: "errors.dependencyMissing",
+  model_missing: "errors.modelMissing",
+  internal_error: "errors.internal",
+  cancelled: "errors.cancelled",
 };
 
-const getFriendlyErrorMessage = (code?: string | null, hint?: string | null, fallback?: string | null) => {
-  if (code && ERROR_HINT_MAP[code]) {
-    return ERROR_HINT_MAP[code];
+const getFriendlyErrorMessage = (
+  t: Translator,
+  code?: string | null,
+  hint?: string | null,
+  fallback?: string | null,
+) => {
+  if (code && ERROR_HINT_KEYS[code]) {
+    return t(ERROR_HINT_KEYS[code]);
   }
   if (hint) {
     return hint;
@@ -64,11 +73,12 @@ const getFriendlyErrorMessage = (code?: string | null, hint?: string | null, fal
   if (fallback) {
     return fallback;
   }
-  return "任务失败，请稍后重试。";
+  return t("errors.generic");
 };
 
 export function useImageGeneration(options: UseImageGenerationOptions): UseImageGenerationResult {
   const { authKey, maxActiveTasks = DEFAULT_MAX_ACTIVE_TASKS, onHistoryUpdated } = options;
+  const { t } = useI18n();
 
   const [prompt, setPrompt] = useState("");
   const [settings, setSettings] = useState<GenerationSettings>({
@@ -88,7 +98,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
   const [error, setError] = useState<string | undefined>();
   const [generationTime, setGenerationTime] = useState<number | undefined>();
   const [currentBatchMeta, setCurrentBatchMeta] = useState<BatchMeta | null>(null);
-  const [currentBatchItems, setCurrentBatchItems] = useState<BatchPreviewItem[]>([]);
+  const [currentBatchItems, setCurrentBatchItems] = useState<BatchItem[]>([]);
   const [isCancellingBatch, setIsCancellingBatch] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -96,7 +106,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
   const currentBatchIdRef = useRef<string | null>(null);
 
   const mutateBatchItem = useCallback(
-    (batchId: string, taskId: string, transform: (prev: BatchPreviewItem | undefined) => BatchPreviewItem | undefined) => {
+    (batchId: string, taskId: string, transform: (prev: BatchItem | undefined) => BatchItem | undefined) => {
       setCurrentBatchItems((prev) => {
         if (currentBatchIdRef.current !== batchId) {
           return prev;
@@ -128,10 +138,6 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
     setSettings((prev) => ({ ...prev, ...updates }));
   }, []);
 
-  const handleSettingsChange = (key: keyof GenerationSettings, value: number | null) => {
-    updateSettings({ [key]: value });
-  };
-
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) return;
 
@@ -139,7 +145,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
     const activeCount = Object.keys(pollTimers.current).length;
     if (activeCount + batchSize > maxActiveTasks) {
       setStatus("error");
-      setError(`当前已有 ${activeCount} 个任务运行，最多允许 ${maxActiveTasks} 个。请等待完成或取消部分任务。`);
+      setError(t("errors.tooManyTasks", { active: activeCount, max: maxActiveTasks }));
       return;
     }
 
@@ -229,7 +235,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
               }
             } else if (response.status === "FAILURE" || response.status === "REVOKED") {
               clearTimer();
-              const friendly = getFriendlyErrorMessage(response.error_code, response.error_hint, response.error);
+              const friendly = getFriendlyErrorMessage(t, response.error_code, response.error_hint, response.error);
               const finalStatus = response.status === "REVOKED" ? "cancelled" : "error";
               mutateBatchItem(batchId, task_id, (prev) => ({
                 ...(prev ?? { taskId: task_id, index, status: finalStatus }),
@@ -253,27 +259,28 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
             mutateBatchItem(batchId, task_id, (prev) => ({
               ...(prev ?? { taskId: task_id, index, status: "error" }),
               status: "error",
-              errorHint: "无法从服务器获取状态",
+              errorHint: t("errors.statusPoll"),
             }));
             if (currentBatchIdRef.current === batchId) {
               setStatus("error");
-              setError("无法从服务器获取状态，请稍后重试。");
+              setError(t("errors.statusPollHint"));
             }
           }
         }, 500);
 
         pollTimers.current[task_id] = intervalId;
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Failed to start generation";
+        const fallbackMessage = t("errors.failedToStart");
+        const message = err instanceof Error && err.message ? err.message : fallbackMessage;
         if (currentBatchIdRef.current === batchId) {
           setStatus("error");
-          setError(message);
+          setError(message || fallbackMessage);
         }
         mutateBatchItem(batchId, `failed-${batchId}-${index}`, () => ({
           taskId: `failed-${batchId}-${index}`,
           index,
           status: "error",
-          errorHint: message || "无法启动生成任务",
+          errorHint: message || fallbackMessage,
         }));
       }
     };
@@ -284,7 +291,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
     } finally {
       setIsSubmitting(false);
     }
-  }, [authKey, maxActiveTasks, mutateBatchItem, onHistoryUpdated, prompt, settings]);
+  }, [authKey, maxActiveTasks, mutateBatchItem, onHistoryUpdated, prompt, settings, t]);
 
   const handleCancelBatch = useCallback(async () => {
     if (!currentBatchMeta) {
@@ -316,14 +323,14 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
           return {
             ...prev,
             status: "cancelled",
-            errorHint: ERROR_HINT_MAP.cancelled,
+            errorHint: t("errors.cancelled"),
           };
         });
       });
     } finally {
       setIsCancellingBatch(false);
     }
-  }, [authKey, currentBatchItems, currentBatchMeta, mutateBatchItem]);
+  }, [authKey, currentBatchItems, currentBatchMeta, mutateBatchItem, t]);
 
   useEffect(() => {
     return () => {
@@ -340,12 +347,39 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
     setStatus("success");
   }, []);
 
+  /** 从历史记录加载完整信息到表单 */
+  const loadFromHistory = useCallback((info: ImageSelectionInfo) => {
+    // 更新图片显示
+    setImageUrl(info.imageUrl);
+    setStatus("success");
+    
+    // 更新提示词
+    if (info.prompt) {
+      setPrompt(info.prompt);
+    }
+    
+    // 更新设置
+    const updates: Partial<GenerationSettings> = {};
+    if (info.width) updates.width = info.width;
+    if (info.height) updates.height = info.height;
+    if (info.steps !== undefined) updates.steps = info.steps;
+    if (info.guidance !== undefined) updates.guidance = info.guidance;
+    if (info.seed !== undefined) updates.seed = info.seed;
+    
+    if (Object.keys(updates).length > 0) {
+      setSettings((prev) => ({ ...prev, ...updates }));
+    }
+    
+    if (info.width && info.height) {
+      setLastSize({ width: info.width, height: info.height });
+    }
+  }, []);
+
   return {
     prompt,
     setPrompt,
     settings,
     updateSettings,
-    handleSettingsChange,
     status,
     imageUrl,
     error,
@@ -358,5 +392,6 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
     handleGenerate,
     handleCancelBatch,
     selectImage,
+    loadFromHistory,
   };
 }

@@ -2,14 +2,15 @@ import { useEffect, useState } from "react";
 import { Header, MobileNav } from "./components/Header";
 import { PromptInput } from "./components/PromptInput";
 import { AdvancedSettings } from "./components/AdvancedSettings";
-import { ResultViewer } from "./components/ResultViewer";
+import { GenerationViewer, type BatchItem } from "./components/GenerationViewer";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { HistoryPage } from "./pages/HistoryPage";
-import { BatchPreview, type BatchPreviewItem } from "./components/BatchPreview";
 import { useAuthKey } from "./hooks/useAuthKey";
 import { useHistory } from "./hooks/useHistory";
 import { useImageGeneration } from "./hooks/useImageGeneration";
+import { useI18n } from "./i18n";
 import type { HistoryError } from "./types/history";
+import type { ImageSelectionInfo } from "./api/types";
 
 type ViewMode = "studio" | "history";
 type MobilePanel = "controls" | "result";
@@ -30,7 +31,6 @@ function App() {
     prompt,
     setPrompt,
     settings,
-    handleSettingsChange,
     updateSettings,
     status,
     imageUrl,
@@ -44,6 +44,7 @@ function App() {
     handleGenerate,
     handleCancelBatch,
     selectImage,
+    loadFromHistory,
   } = useImageGeneration({
     authKey,
     onHistoryUpdated: () => {
@@ -63,9 +64,18 @@ function App() {
     const updateMatch = () => setIsMobile(mediaQuery.matches);
     updateMatch();
     
-    mediaQuery.addEventListener?.("change", updateMatch) ?? mediaQuery.addListener?.(updateMatch);
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", updateMatch);
+    } else if (typeof mediaQuery.addListener === "function") {
+      mediaQuery.addListener(updateMatch);
+    }
+
     return () => {
-      mediaQuery.removeEventListener?.("change", updateMatch) ?? mediaQuery.removeListener?.(updateMatch);
+      if (typeof mediaQuery.removeEventListener === "function") {
+        mediaQuery.removeEventListener("change", updateMatch);
+      } else if (typeof mediaQuery.removeListener === "function") {
+        mediaQuery.removeListener(updateMatch);
+      }
     };
   }, []);
 
@@ -112,6 +122,7 @@ function App() {
             isCancellingBatch={isCancellingBatch}
             handleCancelBatch={handleCancelBatch}
             selectImage={selectImage}
+            loadFromHistory={loadFromHistory}
             historyItems={historyItems}
             isHistoryLoading={isHistoryLoading}
             historyError={historyError}
@@ -128,6 +139,10 @@ function App() {
                 onLoadMore={loadMoreHistory}
                 onSelectImage={(url, size) => {
                   selectImage(url, size);
+                  setActiveView("studio");
+                }}
+                onLoadToStudio={(info: ImageSelectionInfo) => {
+                  loadFromHistory(info);
                   setActiveView("studio");
                 }}
                 onDeleteItem={deleteHistoryItem}
@@ -160,10 +175,11 @@ interface StudioViewProps {
   generationTime?: number;
   lastSize?: { width: number; height: number };
   currentBatchMeta: any;
-  currentBatchItems: BatchPreviewItem[];
+  currentBatchItems: BatchItem[];
   isCancellingBatch: boolean;
   handleCancelBatch: () => void;
   selectImage: (url: string, size?: { width: number; height: number }) => void;
+  loadFromHistory: (info: ImageSelectionInfo) => void;
   historyItems: any[];
   isHistoryLoading: boolean;
   historyError: HistoryError;
@@ -189,10 +205,12 @@ function StudioView({
   isCancellingBatch,
   handleCancelBatch,
   selectImage,
+  loadFromHistory,
   historyItems,
   isHistoryLoading,
   historyError,
 }: StudioViewProps) {
+  const { t } = useI18n();
   return (
     <>
       {/* Mobile Panel Switcher */}
@@ -210,7 +228,7 @@ function StudioView({
                     : "text-stone-500 active:bg-stone-200"
                 }`}
               >
-                {panel === "controls" ? "Create" : "Results"}
+                {panel === "controls" ? t("app.mobile.controls") : t("app.mobile.results")}
               </button>
             ))}
           </div>
@@ -236,12 +254,12 @@ function StudioView({
             {/* Tips section */}
             <div className="pt-4 text-xs text-stone-500 leading-relaxed border-t border-stone-200">
               <p className="mb-2 font-semibold text-stone-400 uppercase tracking-wider text-[10px]">
-                Tips
+                {t("app.tips.title")}
               </p>
               <ul className="list-disc pl-4 space-y-1.5 marker:text-stone-300">
-                <li>Short, descriptive prompts work best.</li>
-                <li>Try adding details like lighting, style, camera, etc.</li>
-                <li>Supports bilingual (English & Chinese) prompts.</li>
+                <li>{t("app.tips.line1")}</li>
+                <li>{t("app.tips.line2")}</li>
+                <li>{t("app.tips.line3")}</li>
               </ul>
             </div>
           </div>
@@ -255,30 +273,27 @@ function StudioView({
           key="result-panel"
         >
           <div className="max-w-4xl mx-auto space-y-8 lg:space-y-10">
-            <div className="min-h-[40vh] lg:min-h-[45vh]">
-              <ResultViewer
-                status={status as any}
-                imageUrl={imageUrl}
-                error={error}
-                generationTime={generationTime}
-                width={lastSize?.width}
-                height={lastSize?.height}
-              />
-              <BatchPreview
-                batchId={currentBatchMeta?.id}
-                total={currentBatchMeta?.size ?? 0}
-                items={currentBatchItems}
-                onSelectImage={(url, size) => selectImage(url, size)}
-                onCancel={handleCancelBatch}
-                isCancelling={isCancellingBatch}
-              />
-            </div>
+            <GenerationViewer
+              status={status as any}
+              imageUrl={imageUrl}
+              error={error}
+              generationTime={generationTime}
+              width={lastSize?.width}
+              height={lastSize?.height}
+              batchId={currentBatchMeta?.id}
+              batchTotal={currentBatchMeta?.size ?? 1}
+              batchItems={currentBatchItems}
+              onSelectImage={(url, size) => selectImage(url, size)}
+              onCancel={handleCancelBatch}
+              isCancelling={isCancellingBatch}
+            />
             
             <HistoryPanel
               items={historyItems}
               isLoading={isHistoryLoading}
               error={historyError}
               onSelectImage={(url) => selectImage(url)}
+              onLoadFromHistory={loadFromHistory}
             />
           </div>
         </div>

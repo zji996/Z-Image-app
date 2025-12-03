@@ -56,6 +56,21 @@ export interface TaskSummary {
   width?: number;
   relative_path?: string;
   image_url?: string | null;
+  num_inference_steps?: number;
+  guidance_scale?: number;
+  seed?: number | null;
+  negative_prompt?: string | null;
+}
+
+/** 选中图片时携带的完整信息 */
+export interface ImageSelectionInfo {
+  imageUrl: string;
+  prompt?: string;
+  width?: number;
+  height?: number;
+  steps?: number;
+  guidance?: number;
+  seed?: number | null;
 }
 
 export interface CancelTaskResponse {
