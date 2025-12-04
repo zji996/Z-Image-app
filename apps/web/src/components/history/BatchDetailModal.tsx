@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 import { Calendar, X, Loader2, AlertTriangle, ChevronLeft, ChevronRight, Settings2, Copy, Download, Maximize2, Wand2, Trash2 } from "lucide-react";
 import type { BatchDetail, BatchItemDetail, BatchSummary, ImageSelectionInfo } from "../../api/types";
 import { getDownloadUrl, getImageUrl } from "../../api/client";
+import { buildSelectionInfoFromDetail } from "../../utils/selection";
 import { useI18n } from "../../i18n";
 
 interface BatchDetailModalProps {
@@ -21,28 +22,6 @@ interface BatchDetailModalProps {
   renderPlaceholder?: () => ReactNode;
   thumbnailAnimationDelayStep?: number;
 }
-
-const buildSelectionInfo = (
-  batch: BatchSummary,
-  item?: BatchItemDetail
-): ImageSelectionInfo | null => {
-  if (!item?.image_url) return null;
-
-  return {
-    imageUrl: getImageUrl(item.image_url),
-    batchId: batch.task_id,
-    taskId: item.task_id,
-    batchSize: batch.batch_size,
-    successCount: batch.success_count,
-    failedCount: batch.failed_count,
-    prompt: batch.prompt,
-    width: item.width || batch.width,
-    height: item.height || batch.height,
-    steps: batch.num_inference_steps,
-    guidance: batch.guidance_scale,
-    seed: item.seed ?? batch.base_seed,
-  };
-};
 
 export function BatchDetailModal({
   batch,
@@ -112,7 +91,7 @@ export function BatchDetailModal({
     (item?: BatchItemDetail) => {
       if (!onLoadToStudio) return;
       const target = item ?? currentImage ?? successItems[0];
-      const info = target ? buildSelectionInfo(batch, target) : null;
+      const info = target ? buildSelectionInfoFromDetail(batch, target) : null;
       if (!info) return;
       onLoadToStudio(info);
       onClose();

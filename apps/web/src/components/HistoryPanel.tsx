@@ -1,10 +1,11 @@
 import { useState } from "react";
 import type React from "react";
-import { BatchSummary, ImageSelectionInfo } from "../api/types";
+import type { BatchSummary, HistoryError, ImageSelectionInfo } from "../api/types";
 import { getImageUrl } from "../api/client";
-import type { HistoryError } from "../types/history";
+import { buildSelectionInfoFromBatch } from "../utils/selection";
 import { Copy, Wand2, Layers, Loader2, AlertTriangle } from "lucide-react";
 import { useI18n } from "../i18n";
+import { CachedImage } from "./CachedImage";
 
 interface HistoryPanelProps {
   items: BatchSummary[];
@@ -30,35 +31,11 @@ export function HistoryPanel({ items, isLoading, onSelectImage, onLoadFromHistor
     }
   };
 
-  const buildSelectionInfo = (batch: BatchSummary): ImageSelectionInfo | null => {
-    const imageUrl = batch.image_url
-      ? getImageUrl(batch.image_url)
-      : batch.relative_path
-        ? getImageUrl(batch.relative_path)
-        : null;
-
-    if (!imageUrl) return null;
-
-    return {
-      imageUrl,
-      batchId: batch.task_id,
-      batchSize: batch.batch_size,
-      successCount: batch.success_count,
-      failedCount: batch.failed_count,
-      prompt: batch.prompt,
-      width: batch.width,
-      height: batch.height,
-      steps: batch.num_inference_steps,
-      guidance: batch.guidance_scale,
-      seed: batch.base_seed,
-    };
-  };
-
   const handleLoadToStudio = (e: React.MouseEvent, batch: BatchSummary) => {
     e.stopPropagation();
     if (!onLoadFromHistory) return;
 
-    const info = buildSelectionInfo(batch);
+    const info = buildSelectionInfoFromBatch(batch);
     if (!info) return;
 
     onLoadFromHistory(info);
@@ -135,14 +112,14 @@ export function HistoryPanel({ items, isLoading, onSelectImage, onLoadFromHistor
                   <div className="absolute inset-0 bg-stone-100" />
                   
                   {/* 主按钮 - 点击选择图片 */}
-                  <button
+                    <button
                     type="button"
                     onClick={() => {
                       if (!hasImage) {
                         return;
                       }
                       if (onLoadFromHistory) {
-                        const info = buildSelectionInfo(batch);
+                        const info = buildSelectionInfoFromBatch(batch);
                         if (info) {
                           onLoadFromHistory(info);
                         }
@@ -157,7 +134,7 @@ export function HistoryPanel({ items, isLoading, onSelectImage, onLoadFromHistor
                     className="w-full h-full relative z-10"
                   >
                     {hasImage ? (
-                      <img
+                      <CachedImage
                         src={imageUrl}
                         alt={batch.prompt || t("historyPanel.imageAlt")}
                         className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"

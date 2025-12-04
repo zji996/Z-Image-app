@@ -1,7 +1,6 @@
 import { useCallback, useState, type ReactNode } from "react";
-import type { BatchSummary, BatchDetail, ImageSelectionInfo } from "../api/types";
+import type { BatchSummary, BatchDetail, HistoryError, ImageSelectionInfo } from "../api/types";
 import { getBatchDetail } from "../api/client";
-import type { HistoryError } from "../types/history";
 import { useI18n } from "../i18n";
 import { HistoryHeader } from "../components/history/HistoryHeader";
 import { HistoryGrid } from "../components/history/HistoryGrid";

@@ -1,24 +1,10 @@
-import { Download, Loader2, AlertCircle, Maximize2, X, Image as ImageIcon, AlertTriangle, StopCircle } from "lucide-react";
+import { Download, Loader2, AlertCircle, Maximize2, Image as ImageIcon, AlertTriangle, StopCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../i18n";
 import type { TranslationKey } from "../i18n/translations";
 import { getDownloadUrl } from "../api/client";
-
-export type GenerationStatus = "idle" | "pending" | "generating" | "success" | "error";
-export type BatchItemStatus = "pending" | "running" | "success" | "error" | "cancelled";
-
-export interface BatchItem {
-  taskId: string;
-  index: number;
-  status: BatchItemStatus;
-  imageUrl?: string;
-  width?: number;
-  height?: number;
-  seed?: number | null;
-  errorCode?: string | null;
-  errorHint?: string | null;
-  progress?: number;
-}
+import type { BatchItem, BatchItemStatus, GenerationStatus } from "../api/types";
+import { CachedImage } from "./CachedImage";
 
 interface GenerationViewerProps {
   status: GenerationStatus;
@@ -164,7 +150,7 @@ export function GenerationViewer({
               <div className="absolute inset-0 pattern-dots opacity-[0.03]" />
 
               {imageUrl ? (
-                <img
+                <CachedImage
                   src={imageUrl}
                   alt={t("result.imageAlt")}
                   className="max-w-full h-auto object-contain max-h-[50vh] lg:max-h-[60vh] shadow-sm rounded-lg"
@@ -242,7 +228,7 @@ export function GenerationViewer({
                       }`}
                     style={{ animationDelay: `${index * 60}ms` }}
                   >
-                    <img
+                    <CachedImage
                       src={item.imageUrl}
                       alt={t("batch.alt", { index: index + 1 })}
                       className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"

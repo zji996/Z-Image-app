@@ -71,9 +71,6 @@ export interface BatchSummary {
   base_seed?: number | null;
 }
 
-// 保留 TaskSummary 作为别名以保持向后兼容
-export type TaskSummary = BatchSummary;
-
 /**
  * 批次内单个图片的状态，对应 /v1/history/{batch_id} 返回的 items 数组元素
  */
@@ -119,3 +116,28 @@ export interface CancelTaskResponse {
   status: string;
   message?: string;
 }
+
+/** 批次项状态 */
+export type BatchItemStatus = "pending" | "running" | "success" | "error" | "cancelled";
+
+/**
+ * 前端使用的批次项，与后端 BatchItemDetail 对应但更易用
+ */
+export interface BatchItem {
+  taskId: string;
+  index: number;
+  status: BatchItemStatus;
+  imageUrl?: string;
+  width?: number;
+  height?: number;
+  seed?: number | null;
+  errorCode?: string | null;
+  errorHint?: string | null;
+  progress?: number;
+}
+
+/** 生成状态 */
+export type GenerationStatus = "idle" | "pending" | "generating" | "success" | "error";
+
+/** 历史记录错误类型 */
+export type HistoryError = "unauthorized" | "unknown" | null;

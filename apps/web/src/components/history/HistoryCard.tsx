@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { BatchSummary } from "../../api/types";
 import { getImageUrl } from "../../api/client";
 import { useI18n } from "../../i18n";
+import { CachedImage } from "../CachedImage";
 
 interface HistoryCardProps {
   batch: BatchSummary;
@@ -77,7 +78,7 @@ export function HistoryCard({
         }`}
       >
         {hasImage ? (
-          <img
+          <CachedImage
             src={imageUrl}
             alt={batch.prompt || t("historyPanel.imageAlt")}
             className="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105"

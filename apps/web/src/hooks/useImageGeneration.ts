@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cancelTask, generateImage, getBatchDetail, getImageUrl } from "../api/client";
-import type { BatchItemDetail, ImageSelectionInfo } from "../api/types";
+import type { BatchItem, BatchItemDetail, GenerationStatus, ImageSelectionInfo } from "../api/types";
 import { useI18n } from "../i18n";
-
-type GenerationStatus = "idle" | "pending" | "generating" | "success" | "error";
 
 export interface GenerationSettings {
   width: number;
@@ -19,20 +17,6 @@ export interface BatchMeta {
   size: number;
   completed?: number;
   failed?: number;
-}
-
-/** 前端使用的批次项状态，与后端 BatchItemDetail 对应 */
-export interface BatchItem {
-  taskId: string;
-  index: number;
-  status: "pending" | "running" | "success" | "error" | "cancelled";
-  imageUrl?: string;
-  width?: number;
-  height?: number;
-  seed?: number | null;
-  errorCode?: string | null;
-  errorHint?: string | null;
-  progress?: number;
 }
 
 export interface UseImageGenerationOptions {
@@ -396,6 +380,11 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
 
   const selectImage = useCallback(
     (url: string, size?: { width: number; height: number }, options?: { keepBatchState?: boolean }) => {
+      // 如果是同一张图片，跳过更新避免不必要的重新渲染和图片重新加载
+      if (url === imageUrl) {
+        return;
+      }
+
       const { keepBatchState = false } = options ?? {};
 
       // 如果正在生成或明确要保持 batch 状态，只更新主预览图片
@@ -412,7 +401,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
         });
       }
     },
-    [setSingleImageState, status]
+    [imageUrl, setSingleImageState, status]
   );
 
   /** 从历史记录加载完整批次到 Studio（样式与实时生成保持一致） */

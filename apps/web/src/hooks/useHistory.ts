@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, deleteHistoryItem, getHistory } from "../api/client";
-import type { BatchSummary } from "../api/types";
-import type { HistoryError } from "../types/history";
+import type { BatchSummary, HistoryError } from "../api/types";
 
 type LoadHistoryOptions = {
   reset?: boolean;
