@@ -1,13 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, deleteHistoryItem, getHistory } from "../api/client";
+import { useEffect } from "react";
+import { useHistoryStore } from "../store/historyStore";
 import type { BatchSummary, HistoryError } from "../api/types";
-
-type LoadHistoryOptions = {
-  reset?: boolean;
-  clearBeforeFetch?: boolean;
-};
-
-const HISTORY_PAGE_SIZE = 24;
 
 interface UseHistoryResult {
   items: BatchSummary[];
@@ -21,112 +14,37 @@ interface UseHistoryResult {
   isDeletingMany: boolean;
 }
 
+/**
+ * Hook for managing history state
+ * Uses Zustand store internally for state management
+ */
 export function useHistory(authKey: string): UseHistoryResult {
-  const [items, setItems] = useState<BatchSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<HistoryError>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [isDeletingMany, setIsDeletingMany] = useState(false);
-  const offsetRef = useRef(0);
+  const {
+    items,
+    isLoading,
+    error,
+    hasMore,
+    isDeletingMany,
+    fetchHistory,
+    loadMore: storeLoadMore,
+    deleteItem: storeDeleteItem,
+    deleteMany: storeDeleteMany,
+  } = useHistoryStore();
 
-  const loadHistory = useCallback(
-    async ({ reset = false, clearBeforeFetch = false }: LoadHistoryOptions = {}) => {
-      if (reset) {
-        offsetRef.current = 0;
-        if (clearBeforeFetch) {
-          setItems([]);
-        }
-        setHasMore(true);
-      }
-
-      setError(null);
-      setIsLoading(true);
-
-      try {
-        const offset = reset ? 0 : offsetRef.current;
-        const fetched = await getHistory(authKey || "admin", HISTORY_PAGE_SIZE, offset);
-
-        setItems((prev) => (reset ? fetched : [...prev, ...fetched]));
-        offsetRef.current = offset + fetched.length;
-        setHasMore(fetched.length === HISTORY_PAGE_SIZE);
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 401) {
-          setError("unauthorized");
-          setItems([]);
-          offsetRef.current = 0;
-          setHasMore(false);
-        } else {
-          console.error("Failed to fetch history", err);
-          setError("unknown");
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [authKey],
-  );
-
-  const refresh = useCallback(
-    (clearBeforeFetch = false) => {
-      void loadHistory({ reset: true, clearBeforeFetch });
-    },
-    [loadHistory],
-  );
-
-  const loadMore = useCallback(() => {
-    if (isLoading || !hasMore) {
-      return;
-    }
-    void loadHistory();
-  }, [isLoading, hasMore, loadHistory]);
-
-  const deleteItem = useCallback(
-    async (batchId: string) => {
-      try {
-        await deleteHistoryItem(batchId, authKey || "admin");
-        // 刷新列表
-        refresh(true);
-      } catch (err) {
-        console.error("Failed to delete batch", err);
-        throw err;
-      }
-    },
-    [authKey, refresh],
-  );
-
-  const deleteMany = useCallback(
-    async (batchIds: string[]) => {
-      if (!batchIds.length) return;
-      setIsDeletingMany(true);
-      try {
-        await Promise.all(
-          batchIds.map((id) =>
-            deleteHistoryItem(id, authKey || "admin").catch((err) => {
-              console.error(`Failed to delete batch ${id}`, err);
-            }),
-          ),
-        );
-        refresh(true);
-      } finally {
-        setIsDeletingMany(false);
-      }
-    },
-    [authKey, refresh],
-  );
-
+  // Load history when authKey changes
   useEffect(() => {
-    refresh(true);
-  }, [authKey, refresh]);
+    fetchHistory(authKey, true, true);
+  }, [authKey, fetchHistory]);
 
   return {
     items,
     isLoading,
     error,
     hasMore,
-    refresh,
-    loadMore,
-    deleteItem,
-    deleteMany,
     isDeletingMany,
+    refresh: (clearBeforeFetch = false) => fetchHistory(authKey, true, clearBeforeFetch),
+    loadMore: () => storeLoadMore(authKey),
+    deleteItem: (batchId: string) => storeDeleteItem(batchId, authKey),
+    deleteMany: (batchIds: string[]) => storeDeleteMany(batchIds, authKey),
   };
 }

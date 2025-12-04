@@ -2,6 +2,7 @@ import { useCallback, useState, type ReactNode } from "react";
 import type { BatchSummary, BatchDetail, HistoryError, ImageSelectionInfo } from "../api/types";
 import { getBatchDetail } from "../api/client";
 import { useI18n } from "../i18n";
+import { useClipboard } from "../hooks/useClipboard";
 import { HistoryHeader } from "../components/history/HistoryHeader";
 import { HistoryGrid } from "../components/history/HistoryGrid";
 import { BatchDetailModal } from "../components/history/BatchDetailModal";
@@ -58,8 +59,8 @@ export function HistoryPage({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [localBatchDeleting, setLocalBatchDeleting] = useState(false);
 
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const { t } = useI18n();
+  const { copy, copiedId } = useClipboard();
 
   const formatDate = useCallback(
     (dateStr?: string) => formatHistoryDate(dateStr, t("history.preview.dateFallback")),
@@ -189,16 +190,8 @@ export function HistoryPage({
   }, [batchDeleting, exitSelectionMode, onBatchDelete, onDeleteItem, selectedIds, t]);
 
   const handleCopyPrompt = useCallback(async (prompt: string, taskId?: string) => {
-    try {
-      await navigator.clipboard.writeText(prompt);
-      if (taskId) {
-        setCopiedId(taskId);
-        setTimeout(() => setCopiedId(null), 1500);
-      }
-    } catch (err) {
-      console.error("Failed to copy prompt", err);
-    }
-  }, []);
+    await copy(prompt, taskId);
+  }, [copy]);
 
   const modalLoadToStudio = useCallback((info: ImageSelectionInfo) => {
     if (onLoadToStudio) {

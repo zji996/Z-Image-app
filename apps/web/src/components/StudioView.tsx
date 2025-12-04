@@ -3,8 +3,8 @@ import { AdvancedSettings } from "./AdvancedSettings";
 import { GenerationViewer } from "./GenerationViewer";
 import { HistoryPanel } from "./HistoryPanel";
 import { useI18n } from "../i18n";
-import type { BatchItem, BatchSummary, GenerationStatus, HistoryError, ImageSelectionInfo } from "../api/types";
-import type { GenerationSettings, BatchMeta } from "../hooks/useImageGeneration";
+import type { BatchSummary, HistoryError, ImageSelectionInfo } from "../api/types";
+import { useGenerationStore } from "../store/generationStore";
 
 type MobilePanel = "controls" | "result";
 
@@ -12,23 +12,12 @@ export interface StudioViewProps {
   isMobile: boolean;
   mobilePanel: MobilePanel;
   setMobilePanel: (panel: MobilePanel) => void;
-  prompt: string;
-  setPrompt: (prompt: string) => void;
-  settings: GenerationSettings;
-  updateSettings: (updates: Partial<GenerationSettings>) => void;
+  // Generation actions (from hook)
   handleGenerate: () => void;
-  isSubmitting: boolean;
-  status: GenerationStatus;
-  imageUrl: string | null;
-  error?: string;
-  generationTime?: number;
-  lastSize?: { width: number; height: number };
-  currentBatchMeta: BatchMeta | null;
-  currentBatchItems: BatchItem[];
-  isCancellingBatch: boolean;
   handleCancelBatch: () => void;
   selectImage: (url: string, size?: { width: number; height: number }, options?: { keepBatchState?: boolean }) => void;
   loadFromHistory: (info: ImageSelectionInfo) => void;
+  // History data
   historyItems: BatchSummary[];
   isHistoryLoading: boolean;
   historyError: HistoryError;
@@ -38,20 +27,7 @@ export function StudioView({
   isMobile,
   mobilePanel,
   setMobilePanel,
-  prompt,
-  setPrompt,
-  settings,
-  updateSettings,
   handleGenerate,
-  isSubmitting,
-  status,
-  imageUrl,
-  error,
-  generationTime,
-  lastSize,
-  currentBatchMeta,
-  currentBatchItems,
-  isCancellingBatch,
   handleCancelBatch,
   selectImage,
   loadFromHistory,
@@ -60,6 +36,23 @@ export function StudioView({
   historyError,
 }: StudioViewProps) {
   const { t } = useI18n();
+  
+  // Get all generation state from store
+  const {
+    prompt,
+    setPrompt,
+    settings,
+    updateSettings,
+    status,
+    imageUrl,
+    error,
+    generationTime,
+    lastSize,
+    isSubmitting,
+    currentBatchMeta,
+    currentBatchItems,
+    isCancellingBatch,
+  } = useGenerationStore();
 
   return (
     <>
@@ -152,4 +145,3 @@ export function StudioView({
     </>
   );
 }
-

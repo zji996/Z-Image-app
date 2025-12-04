@@ -1,4 +1,4 @@
-import { Download, Loader2, AlertCircle, Maximize2, Image as ImageIcon, AlertTriangle, StopCircle } from "lucide-react";
+import { Download, Loader2, AlertCircle, Maximize2, Image as ImageIcon, AlertTriangle, StopCircle, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../i18n";
 import type { TranslationKey } from "../i18n/translations";

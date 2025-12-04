@@ -5,6 +5,8 @@ import { HistoryPage } from "./pages/HistoryPage";
 import { useAuthKey } from "./hooks/useAuthKey";
 import { useHistory } from "./hooks/useHistory";
 import { useImageGeneration } from "./hooks/useImageGeneration";
+import { useMobile } from "./hooks/useMobile";
+import { useGenerationStore } from "./store/generationStore";
 import type { ImageSelectionInfo } from "./api/types";
 
 type ViewMode = "studio" | "history";
@@ -25,19 +27,6 @@ function App() {
   } = useHistory(authKey);
 
   const {
-    prompt,
-    setPrompt,
-    settings,
-    updateSettings,
-    status,
-    imageUrl,
-    error,
-    generationTime,
-    lastSize,
-    isSubmitting,
-    currentBatchMeta,
-    currentBatchItems,
-    isCancellingBatch,
     handleGenerate,
     handleCancelBatch,
     selectImage,
@@ -49,32 +38,12 @@ function App() {
     },
   });
 
+  // Get status from store for auto-switching mobile panel
+  const status = useGenerationStore((state) => state.status);
+  const isMobile = useMobile();
+
   const [activeView, setActiveView] = useState<ViewMode>("studio");
-  const [isMobile, setIsMobile] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("controls");
-
-  // Detect mobile viewport
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const mediaQuery = window.matchMedia("(max-width: 1023px)");
-    const updateMatch = () => setIsMobile(mediaQuery.matches);
-    updateMatch();
-
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", updateMatch);
-    } else if (typeof mediaQuery.addListener === "function") {
-      mediaQuery.addListener(updateMatch);
-    }
-
-    return () => {
-      if (typeof mediaQuery.removeEventListener === "function") {
-        mediaQuery.removeEventListener("change", updateMatch);
-      } else if (typeof mediaQuery.removeListener === "function") {
-        mediaQuery.removeListener(updateMatch);
-      }
-    };
-  }, []);
 
   // Auto-switch to result panel when generating
   useEffect(() => {
@@ -103,20 +72,7 @@ function App() {
             isMobile={isMobile}
             mobilePanel={mobilePanel}
             setMobilePanel={setMobilePanel}
-            prompt={prompt}
-            setPrompt={setPrompt}
-            settings={settings}
-            updateSettings={updateSettings}
             handleGenerate={handleGenerate}
-            isSubmitting={isSubmitting}
-            status={status}
-            imageUrl={imageUrl}
-            error={error}
-            generationTime={generationTime}
-            lastSize={lastSize ?? undefined}
-            currentBatchMeta={currentBatchMeta}
-            currentBatchItems={currentBatchItems}
-            isCancellingBatch={isCancellingBatch}
             handleCancelBatch={handleCancelBatch}
             selectImage={selectImage}
             loadFromHistory={loadFromHistory}

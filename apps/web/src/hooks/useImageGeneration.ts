@@ -1,48 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { cancelTask, generateImage, getBatchDetail, getImageUrl } from "../api/client";
-import type { BatchItem, BatchItemDetail, GenerationStatus, ImageSelectionInfo } from "../api/types";
+import type { BatchItem, BatchItemDetail, ImageSelectionInfo } from "../api/types";
 import { useI18n } from "../i18n";
+import { useGenerationStore, type GenerationSettings, type BatchMeta } from "../store/generationStore";
 
-export interface GenerationSettings {
-  width: number;
-  height: number;
-  steps: number;
-  guidance: number;
-  seed: number | null;
-  images: number;
-}
-
-export interface BatchMeta {
-  id: string;
-  size: number;
-  completed?: number;
-  failed?: number;
-}
+export type { GenerationSettings, BatchMeta };
 
 export interface UseImageGenerationOptions {
   authKey: string;
   maxActiveTasks?: number;
   onHistoryUpdated?: () => void;
-}
-
-interface UseImageGenerationResult {
-  prompt: string;
-  setPrompt: (value: string) => void;
-  settings: GenerationSettings;
-  updateSettings: (updates: Partial<GenerationSettings>) => void;
-  status: GenerationStatus;
-  imageUrl: string | null;
-  error?: string;
-  generationTime?: number;
-  lastSize: { width: number; height: number } | null;
-  isSubmitting: boolean;
-  currentBatchMeta: BatchMeta | null;
-  currentBatchItems: BatchItem[];
-  isCancellingBatch: boolean;
-  handleGenerate: () => Promise<void>;
-  handleCancelBatch: () => Promise<void>;
-  selectImage: (url: string, size?: { width: number; height: number }) => void;
-  loadFromHistory: (info: ImageSelectionInfo) => void;
 }
 
 const DEFAULT_MAX_ACTIVE_TASKS = 8;
@@ -61,37 +28,41 @@ const toBatchItem = (item: BatchItemDetail): BatchItem => ({
   progress: item.progress ?? undefined,
 });
 
-export function useImageGeneration(options: UseImageGenerationOptions): UseImageGenerationResult {
+export function useImageGeneration(options: UseImageGenerationOptions) {
   const { authKey, maxActiveTasks = DEFAULT_MAX_ACTIVE_TASKS, onHistoryUpdated } = options;
   const { t } = useI18n();
 
-  const [prompt, setPrompt] = useState("");
-  const [settings, setSettings] = useState<GenerationSettings>({
-    width: 1024,
-    height: 1024,
-    steps: 8,
-    guidance: 0.0,
-    seed: null,
-    images: 1,
-  });
-  const [status, setStatus] = useState<GenerationStatus>("idle");
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [lastSize, setLastSize] = useState<{ width: number; height: number } | null>({
-    width: 1024,
-    height: 1024,
-  });
-  const [error, setError] = useState<string | undefined>();
-  const [generationTime, setGenerationTime] = useState<number | undefined>();
-  const [currentBatchMeta, setCurrentBatchMeta] = useState<BatchMeta | null>(null);
-  const [currentBatchItems, setCurrentBatchItems] = useState<BatchItem[]>([]);
-  const [isCancellingBatch, setIsCancellingBatch] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Use global store
+  const {
+    prompt,
+    settings,
+    setPrompt,
+    updateSettings,
+    status,
+    imageUrl,
+    error,
+    generationTime,
+    lastSize,
+    isSubmitting,
+    currentBatchMeta,
+    currentBatchItems,
+    isCancellingBatch,
+    setStatus,
+    setImageUrl,
+    setError,
+    setGenerationTime,
+    setLastSize,
+    setIsSubmitting,
+    setCurrentBatchMeta,
+    setCurrentBatchItems,
+    setIsCancellingBatch,
+    initBatch,
+  } = useGenerationStore();
 
   const batchPollTimer = useRef<number | null>(null);
   const currentBatchIdRef = useRef<string | null>(null);
   const generationStartTimeRef = useRef<number>(0);
 
-  // clearBatchPoll 必须在 setSingleImageState 之前定义，否则会遇到 TDZ 错误
   const clearBatchPoll = useCallback(() => {
     if (batchPollTimer.current) {
       clearInterval(batchPollTimer.current);
@@ -125,8 +96,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
 
       clearBatchPoll();
 
-      const effectiveBatchId =
-        batchId ?? `preview-${Date.now()}`;
+      const effectiveBatchId = batchId ?? `preview-${Date.now()}`;
       currentBatchIdRef.current = effectiveBatchId;
 
       setImageUrl(imageUrl);
@@ -136,12 +106,8 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
       setCurrentBatchMeta({
         id: effectiveBatchId,
         size: batchSize ?? 1,
-        ...(typeof successCount === "number"
-          ? { completed: successCount }
-          : {}),
-        ...(typeof failedCount === "number"
-          ? { failed: failedCount }
-          : {}),
+        ...(typeof successCount === "number" ? { completed: successCount } : {}),
+        ...(typeof failedCount === "number" ? { failed: failedCount } : {}),
       });
 
       setCurrentBatchItems([
@@ -161,12 +127,8 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
         setLastSize({ width, height });
       }
     },
-    [clearBatchPoll],
+    [clearBatchPoll, setCurrentBatchItems, setCurrentBatchMeta, setError, setImageUrl, setIsCancellingBatch, setLastSize, setStatus]
   );
-
-  const updateSettings = useCallback((updates: Partial<GenerationSettings>) => {
-    setSettings((prev) => ({ ...prev, ...updates }));
-  }, []);
 
   /** 开始轮询批次状态 */
   const startBatchPolling = useCallback(
@@ -235,7 +197,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
       void poll();
       batchPollTimer.current = window.setInterval(poll, 800);
     },
-    [authKey, clearBatchPoll, onHistoryUpdated]
+    [authKey, clearBatchPoll, onHistoryUpdated, setCurrentBatchItems, setError, setGenerationTime, setImageUrl, setLastSize, setStatus]
   );
 
   const handleGenerate = useCallback(async () => {
@@ -250,7 +212,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
       return;
     }
 
-    // 生成 batch ID（必须是合法 UUID，便于后端直接存为 image_generation_batches.id）
+    // 生成 batch ID
     const batchId =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
@@ -275,21 +237,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
     // 初始化状态
     currentBatchIdRef.current = batchId;
     generationStartTimeRef.current = performance.now();
-    setCurrentBatchMeta({ id: batchId, size: batchSize });
-    setCurrentBatchItems(
-      Array.from({ length: batchSize }, (_, i) => ({
-        taskId: `pending-${batchId}-${i}`,
-        index: i,
-        status: "pending" as const,
-      }))
-    );
-    setIsCancellingBatch(false);
-    setStatus("pending");
-    setError(undefined);
-    setImageUrl(null);
-    setGenerationTime(undefined);
-    setLastSize({ width: settings.width, height: settings.height });
-    setIsSubmitting(true);
+    initBatch(batchId, batchSize, settings.width, settings.height);
 
     try {
       // 串行发送所有生成请求，确保按顺序入队
@@ -329,8 +277,12 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
   }, [
     authKey,
     clearBatchPoll,
+    initBatch,
     maxActiveTasks,
     prompt,
+    setError,
+    setIsSubmitting,
+    setStatus,
     settings,
     startBatchPolling,
     t,
@@ -369,7 +321,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
     } finally {
       setIsCancellingBatch(false);
     }
-  }, [authKey, currentBatchItems, currentBatchMeta, t]);
+  }, [authKey, currentBatchItems, currentBatchMeta, setCurrentBatchItems, setIsCancellingBatch, t]);
 
   // 清理轮询
   useEffect(() => {
@@ -401,10 +353,10 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
         });
       }
     },
-    [imageUrl, setSingleImageState, status]
+    [imageUrl, setImageUrl, setLastSize, setSingleImageState, status]
   );
 
-  /** 从历史记录加载完整批次到 Studio（样式与实时生成保持一致） */
+  /** 从历史记录加载完整批次到 Studio */
   const loadFromHistory = useCallback(
     (info: ImageSelectionInfo) => {
       // 如果没有 batchId，就退化为单张预览
@@ -418,7 +370,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
       } else {
         const batchSize = info.batchSize && info.batchSize > 0 ? info.batchSize : 1;
 
-        // 准备状态，与 handleGenerate 初始化 batch 的逻辑保持一致
+        // 准备状态
         clearBatchPoll();
         currentBatchIdRef.current = info.batchId;
 
@@ -428,7 +380,7 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
             taskId: `history-${info.batchId}-${i}`,
             index: i,
             status: "pending" as const,
-          })),
+          }))
         );
         setIsCancellingBatch(false);
         setStatus("pending");
@@ -457,21 +409,34 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
       if (info.seed !== undefined) updates.seed = info.seed;
 
       if (Object.keys(updates).length > 0) {
-        setSettings((prev) => ({ ...prev, ...updates }));
+        updateSettings(updates);
       }
 
       if (info.width && info.height) {
         setLastSize({ width: info.width, height: info.height });
       }
     },
-    [clearBatchPoll, setSingleImageState, startBatchPolling]
+    [
+      clearBatchPoll,
+      setCurrentBatchItems,
+      setCurrentBatchMeta,
+      setError,
+      setGenerationTime,
+      setImageUrl,
+      setIsCancellingBatch,
+      setLastSize,
+      setPrompt,
+      setStatus,
+      setSingleImageState,
+      startBatchPolling,
+      updateSettings,
+    ]
   );
 
   return {
+    // State (from store)
     prompt,
-    setPrompt,
     settings,
-    updateSettings,
     status,
     imageUrl,
     error,
@@ -481,6 +446,9 @@ export function useImageGeneration(options: UseImageGenerationOptions): UseImage
     currentBatchMeta,
     currentBatchItems,
     isCancellingBatch,
+    // Actions
+    setPrompt,
+    updateSettings,
     handleGenerate,
     handleCancelBatch,
     selectImage,

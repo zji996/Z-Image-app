@@ -5,6 +5,7 @@ import { getImageUrl } from "../api/client";
 import { buildSelectionInfoFromBatch } from "../utils/selection";
 import { Copy, Wand2, Layers, Loader2, AlertTriangle } from "lucide-react";
 import { useI18n } from "../i18n";
+import { useClipboard } from "../hooks/useClipboard";
 import { CachedImage } from "./CachedImage";
 
 interface HistoryPanelProps {
@@ -17,18 +18,12 @@ interface HistoryPanelProps {
 
 export function HistoryPanel({ items, isLoading, onSelectImage, onLoadFromHistory, error }: HistoryPanelProps) {
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const { t } = useI18n();
+  const { copy, isCopied } = useClipboard();
 
   const handleCopyPrompt = async (e: React.MouseEvent, prompt: string, batchId: string) => {
     e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(prompt);
-      setCopiedId(batchId);
-      setTimeout(() => setCopiedId(null), 1500);
-    } catch (err) {
-      console.error("Failed to copy prompt", err);
-    }
+    await copy(prompt, batchId);
   };
 
   const handleLoadToStudio = (e: React.MouseEvent, batch: BatchSummary) => {
@@ -173,7 +168,7 @@ export function HistoryPanel({ items, isLoading, onSelectImage, onLoadFromHistor
                           title={t("historyPanel.copyTitle")}
                         >
                           <Copy size={10} />
-                          <span className="hidden sm:inline">{copiedId === batch.task_id ? t("common.copied") : t("common.copy")}</span>
+                          <span className="hidden sm:inline">{isCopied(batch.task_id) ? t("common.copied") : t("common.copy")}</span>
                         </button>
                       )}
                       {onLoadFromHistory && (
