@@ -13,32 +13,32 @@ export function ApiKeyModal({ authKey, onAuthKeyChange, onClose }: ApiKeyModalPr
   const [showKey, setShowKey] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { t } = useI18n();
-  
+
   useEffect(() => {
     // Auto focus input when modal opens
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
-  
+
   const handleSave = () => {
     onAuthKeyChange(localKey.trim());
     onClose();
   };
-  
+
   const handleClear = () => {
     setLocalKey("");
     inputRef.current?.focus();
   };
-  
+
   return (
-    <div className="fixed inset-0 z-50 lg:hidden">
+    <div className="fixed inset-0 z-50 flex items-start lg:items-center justify-center">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm animate-backdrop-in"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
-      <div className="absolute inset-x-4 top-20 bg-white rounded-2xl shadow-2xl overflow-hidden animate-modal-in ring-1 ring-black/5">
+      <div className="relative mx-4 mt-20 lg:mt-0 w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-modal-in ring-1 ring-black/5">
         <div className="p-4 border-b border-stone-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -54,7 +54,7 @@ export function ApiKeyModal({ authKey, onAuthKeyChange, onClose }: ApiKeyModalPr
             </button>
           </div>
         </div>
-        
+
         <div className="p-4 space-y-4">
           <div className="space-y-2">
             <label className="text-xs font-medium text-stone-500 uppercase tracking-wider">
@@ -100,12 +100,12 @@ export function ApiKeyModal({ authKey, onAuthKeyChange, onClose }: ApiKeyModalPr
               </p>
             )}
           </div>
-          
+
           <p className="text-xs text-stone-500 leading-relaxed">
             {t("header.apiKey.notice")}
           </p>
         </div>
-        
+
         <div className="p-4 bg-stone-50 border-t border-stone-100 flex gap-3">
           <button
             type="button"

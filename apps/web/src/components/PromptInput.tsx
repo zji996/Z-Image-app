@@ -38,10 +38,10 @@ export function PromptInput({ prompt, setPrompt, onGenerate, isGenerating }: Pro
           onKeyDown={handleKeyDown}
           placeholder={t("prompt.placeholder")}
           disabled={isGenerating}
-          className="w-full min-h-[120px] lg:min-h-[140px] p-4 lg:p-5 pr-4 pb-16 lg:pr-32 lg:pb-5 bg-white border border-stone-200 rounded-2xl lg:rounded-3xl text-base lg:text-lg text-stone-800 placeholder-stone-400 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-300 outline-none resize-none transition-all duration-300 shadow-sm group-hover:shadow-md"
+          className="w-full min-h-[120px] lg:min-h-[140px] p-4 lg:p-5 pr-4 pb-16 lg:pb-14 lg:pr-5 bg-white border border-stone-200 rounded-2xl lg:rounded-3xl text-sm lg:text-base text-stone-800 placeholder-stone-400 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-300 outline-none resize-none transition-all duration-300 shadow-sm group-hover:shadow-md"
         />
-        {/* Mobile: button at bottom, Desktop: button at bottom-right */}
-        <div className="absolute bottom-3 left-3 right-3 lg:left-auto lg:right-3">
+        {/* Mobile: button at bottom full width, Desktop: button at bottom-right */}
+        <div className="absolute bottom-3 left-3 right-3 lg:left-auto">
           <button
             onClick={onGenerate}
             disabled={!prompt.trim() || isGenerating}

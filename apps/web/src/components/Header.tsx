@@ -63,11 +63,11 @@ export function Header({ authKey, onAuthKeyChange, activeView, onChangeView }: H
             </span>
           </div>
           
-          {/* Mobile: Key button to open modal */}
+          {/* Unified key button opens modal on all viewports */}
           <button
             type="button"
             onClick={() => setShowKeyModal(true)}
-            className={`lg:hidden flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all text-xs font-medium ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all text-xs font-medium ${
               authKey 
                 ? "bg-emerald-50 border-emerald-200 text-emerald-700" 
                 : "bg-stone-50 border-stone-200 text-stone-500"
@@ -76,16 +76,7 @@ export function Header({ authKey, onAuthKeyChange, activeView, onChangeView }: H
             <Key size={14} />
             <span>{authKey ? t("header.button.keySet") : t("header.button.setKey")}</span>
           </button>
-          
-          {/* Desktop: inline input */}
-          <input
-            type="password"
-            value={authKey}
-            onChange={(e) => onAuthKeyChange(e.target.value)}
-            placeholder={t("header.apiKey.placeholder")}
-            className="hidden lg:block text-xs px-3 py-2 rounded-xl bg-white border border-stone-200 text-stone-600 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 font-mono transition-all shadow-sm w-32 focus:w-48"
-          />
-          
+
           <LanguageToggle />
 
           {/* Version badge - hidden on mobile */}
@@ -95,7 +86,7 @@ export function Header({ authKey, onAuthKeyChange, activeView, onChangeView }: H
         </div>
       </header>
       
-      {/* API Key Modal for mobile */}
+      {/* API Key Modal */}
       {showKeyModal && (
         <ApiKeyModal
           authKey={authKey}
