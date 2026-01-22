@@ -4,7 +4,7 @@
 
 - 基础 URL：默认 `http://localhost:8000`
 - 版本前缀：业务接口统一挂在 `/v1` 下
-- 静态图片访问：`/generated-images/{relative_path}`
+- 图片访问：`/generated-images/{relative_path}`（本地磁盘或 S3/MinIO 由 `Z_IMAGE_STORAGE_BACKEND` 决定）
 
 ---
 
@@ -16,6 +16,10 @@
 - `API_ADMIN_KEY`：管理员 Key，拥有所有权限；
 - `API_ALLOWED_KEYS`：普通调用方白名单，逗号分隔（可选）；
 - `DATABASE_URL` / `REDIS_URL`：数据库与 Redis 连接串。
+- 生成图片存储（可选，用于接入 MinIO / 上云）：
+  - `Z_IMAGE_STORAGE_BACKEND`：`local`（默认）或 `s3`；
+  - `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET_NAME`：S3/MinIO 连接配置；
+  - `S3_PREFIX`：对象 Key 前缀（可选，默认 `z-image-outputs`）。
 
 请求时通过 Header 传入：
 
@@ -138,9 +142,9 @@ X-Auth-Key: <your-api-key>
       "batch_index": 0,
       "batch_size": 4
     },
-    "output_path": ".../outputs/z-image-outputs/20250101/120000_xxx.png",
+    "output_path": "s3://z-image/z-image-outputs/20250101/120000_xxx.png",
     "relative_path": "20250101/120000_xxx.png",
-    "preview_output_path": ".../outputs/z-image-outputs/20250101/120000_xxx.webp",
+    "preview_output_path": "s3://z-image/z-image-outputs/20250101/120000_xxx.webp",
     "preview_relative_path": "20250101/120000_xxx.webp"
   },
   "error": null,

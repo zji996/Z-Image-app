@@ -1,7 +1,7 @@
-import os
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -23,8 +23,22 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://z_image:z_image@localhost:5432/z_image"
     redis_url: str = "redis://localhost:6379/0"
 
-    models_dir: Path = Path(os.getenv("MODELS_DIR", DEFAULT_MODELS_DIR))
-    outputs_dir: Path = Path(os.getenv("Z_IMAGE_OUTPUT_DIR", DEFAULT_OUTPUTS_DIR))
+    models_dir: Path = Field(default=DEFAULT_MODELS_DIR, validation_alias="MODELS_DIR")
+    outputs_dir: Path = Field(default=DEFAULT_OUTPUTS_DIR, validation_alias="Z_IMAGE_OUTPUT_DIR")
+
+    # Storage backend for generated images.
+    # - "local": store under outputs_dir (legacy/default)
+    # - "s3": store in S3-compatible object storage (MinIO/AWS S3)
+    z_image_storage_backend: str = Field(default="local", validation_alias="Z_IMAGE_STORAGE_BACKEND")
+
+    # S3 / MinIO configuration (used when Z_IMAGE_STORAGE_BACKEND=s3).
+    s3_endpoint: str | None = Field(default=None, validation_alias="S3_ENDPOINT")
+    s3_access_key: str | None = Field(default=None, validation_alias="S3_ACCESS_KEY")
+    s3_secret_key: str | None = Field(default=None, validation_alias="S3_SECRET_KEY")
+    s3_bucket_name: str | None = Field(default=None, validation_alias="S3_BUCKET_NAME")
+    s3_region: str = Field(default="us-east-1", validation_alias="S3_REGION")
+    s3_prefix: str = Field(default="z-image-outputs", validation_alias="S3_PREFIX")
+    s3_presign_expiry_seconds: int = Field(default=3600, validation_alias="S3_PRESIGN_EXPIRY_SECONDS")
 
     # Celery worker settings (used by apps/worker).
     # Controls the number of concurrent worker processes for a single Celery
@@ -65,3 +79,12 @@ def get_output_root() -> Path:
     output_root = settings.outputs_dir.resolve()
     output_root.mkdir(parents=True, exist_ok=True)
     return output_root
+
+
+def is_s3_storage_enabled() -> bool:
+    """
+    Returns True when Z-Image is configured to store generated images in S3.
+    """
+
+    settings = get_settings()
+    return settings.z_image_storage_backend.strip().lower() == "s3"

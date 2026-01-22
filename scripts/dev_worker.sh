@@ -5,6 +5,13 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd "${REPO_ROOT}"
 
+if [[ -f "${REPO_ROOT}/.env" ]]; then
+    set -a
+    # shellcheck source=/dev/null
+    . "${REPO_ROOT}/.env"
+    set +a
+fi
+
 # Allow specifying GPU ID via either the GPU_ID env var or
 # as the first positional argument, e.g.:
 #   bash scripts/dev_worker.sh 0

@@ -10,7 +10,7 @@ Celery 异步任务 Worker。
 scripts/dev_deps_up.sh  # legacy: scripts/dev_infra_up.sh / scripts/dev_up.sh
 ```
 
-2. 在 `apps/worker` 创建 `.env`（参考 `.env.example`）。
+2. 推荐在仓库根目录创建 `.env`（参考 `.env.example`）；也可以继续使用 `apps/worker/.env`（参考 `apps/worker/.env.example`）。
 
 3. 使用 `uv` 启动 Celery worker：
 

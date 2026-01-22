@@ -6,6 +6,13 @@ LOG_DIR="${REPO_ROOT}/logs"
 
 mkdir -p "${LOG_DIR}"
 
+if [[ -f "${REPO_ROOT}/.env" ]]; then
+    set -a
+    # shellcheck source=/dev/null
+    . "${REPO_ROOT}/.env"
+    set +a
+fi
+
 # 确保 DF11 模型在首次启动时已下载到 MODELS_DIR/z-image-turbo-df11。
 # 若目录已存在，则 download_models.py 会直接复用并避免重复拉取。
 if ! [ -d "${MODELS_DIR:-${REPO_ROOT}/models}/z-image-turbo-df11" ]; then

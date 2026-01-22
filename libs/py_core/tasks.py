@@ -4,12 +4,12 @@ import json
 import uuid
 from datetime import datetime, timezone
 from .celery_app import celery_app
-from .config import get_output_root
 from .db import (
     record_generation_failed,
     record_generation_started,
     record_generation_succeeded,
 )
+from .storage import encode_image_bytes, get_storage
 from .z_image_pipeline import ZImageNotAvailable, generate_image
 from .types import GenerationResult, JSONDict
 
@@ -130,30 +130,38 @@ def generate_image_task(
         )
         raise RuntimeError(_serialize_generation_error(code, hint, detail)) from exc
 
-    output_root = get_output_root()
-    dated_dir = output_root / now.strftime("%Y%m%d")
-    dated_dir.mkdir(parents=True, exist_ok=True)
-
     timestamp = now.strftime("%H%M%S")
+    date_prefix = now.strftime("%Y%m%d")
     png_filename = f"{timestamp}_{image_id}.png"
-    png_output_path = dated_dir / png_filename
-    image.save(png_output_path)
-
-    png_relative_path = png_output_path.relative_to(output_root)
+    png_relative_path = f"{date_prefix}/{png_filename}"
 
     # In addition to the PNG used for downloads, also save a WebP version
     # for UI previews to reduce bandwidth usage.
     webp_filename = f"{timestamp}_{image_id}.webp"
-    webp_output_path = dated_dir / webp_filename
+    webp_relative_path = f"{date_prefix}/{webp_filename}"
+
+    storage = get_storage()
+
+    png_bytes, _ = encode_image_bytes(image=image, format="PNG")
+    png_output_path = storage.put_bytes(
+        relative_path=png_relative_path,
+        data=png_bytes,
+        content_type="image/png",
+    )
+
     try:
-        # Pillow infers the WEBP format from the suffix; we keep defaults
-        # for quality to avoid surprising file sizes.
-        image.save(webp_output_path)
-        preview_relative_path = webp_output_path.relative_to(output_root)
+        webp_bytes, _ = encode_image_bytes(image=image, format="WEBP")
+        webp_output_path = storage.put_bytes(
+            relative_path=webp_relative_path,
+            data=webp_bytes,
+            content_type="image/webp",
+        )
+        preview_output_path = webp_output_path
+        preview_relative_path = webp_relative_path
     except Exception:  # pragma: no cover - runtime only
         # If WebP save fails for any reason, fall back to the PNG path so
         # callers still have a valid preview URL.
-        webp_output_path = png_output_path
+        preview_output_path = png_output_path
         preview_relative_path = png_relative_path
 
     result: GenerationResult = {
@@ -175,7 +183,7 @@ def generate_image_task(
         "output_path": str(png_output_path),
         "relative_path": str(png_relative_path),
         # WebP paths (for previews).
-        "preview_output_path": str(webp_output_path),
+        "preview_output_path": str(preview_output_path),
         "preview_relative_path": str(preview_relative_path),
     }
 
